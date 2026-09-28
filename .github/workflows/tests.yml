@@ -26,7 +26,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Compile source
-        run: python -m compileall -q rdtx tests
+        run: python -m compileall -q rdtx tests experiments
 
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests -v
