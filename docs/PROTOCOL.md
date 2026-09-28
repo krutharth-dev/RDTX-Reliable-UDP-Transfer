@@ -64,7 +64,7 @@ Sender                                  Receiver
 
 ## 5. Selective Repeat behavior
 
-The sender keeps up to window_size DATA packets in flight. Each outstanding sequence number has its own send timestamp and retry count.
+The sender maintains a base sequence number. New DATA sequence numbers may be emitted only inside `[base, base + window_size)`. Each outstanding sequence number has its own send timestamp and retry count.
 
 When ACK(n) arrives:
 
@@ -74,7 +74,7 @@ When ACK(n) arrives:
 
 When the timeout for n expires, only DATA(n) is retransmitted.
 
-The receiver stores valid sequence numbers independently. Therefore, if DATA(4) is lost but DATA(5) and DATA(6) arrive, 5 and 6 remain buffered and acknowledged while only 4 is recovered.
+ACKs/control datagrams are accepted by the sender only when they come from the configured receiver UDP endpoint. The receiver stores valid sequence numbers independently. Therefore, if DATA(4) is lost but DATA(5) and DATA(6) arrive, 5 and 6 remain buffered and acknowledged while only 4 is recovered.
 
 ## 6. Validation and integrity
 
