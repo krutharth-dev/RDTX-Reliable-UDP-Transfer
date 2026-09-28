@@ -3,37 +3,24 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rdtx-reliable-udp-transfer"
-version = "1.3.0"
-description = "Educational Selective Repeat file-transfer protocol built over UDP."
+name = "rdtx-visual-lab"
+version = "2.0.0"
+description = "Web-based reliable UDP transfer and Selective Repeat analysis lab."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
-keywords = ["computer-networks", "udp", "reliable-data-transfer", "selective-repeat", "networking"]
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Environment :: Console",
-  "Intended Audience :: Education",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Topic :: Education",
-  "Topic :: System :: Networking",
-]
-dependencies = []
-
-[project.urls]
-Repository = "https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer"
-Documentation = "https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/tree/main/docs"
+keywords = ["computer-networks", "udp", "selective-repeat", "reliable-data-transfer", "flask"]
+dependencies = ["Flask>=3.0,<4"]
 
 [project.scripts]
 rdtx = "rdtx.cli:main"
 rdtx-send = "rdtx.cli:send_main"
 rdtx-receive = "rdtx.cli:receive_main"
 rdtx-benchmark = "rdtx.cli:benchmark_main"
+rdtx-web = "webapp.app:main"
 
 [tool.setuptools]
-packages = ["rdtx", "experiments"]
+packages = ["rdtx", "experiments", "webapp"]
+
+[tool.setuptools.package-data]
+webapp = ["templates/*.html", "static/*.css", "static/*.js"]

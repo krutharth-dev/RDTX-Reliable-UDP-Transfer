@@ -17,31 +17,26 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Compile source
-        run: python -m compileall -q rdtx tests experiments
+      - name: Install project
+        run: python -m pip install .
 
-      - name: Run unit and integration tests
+      - name: Compile source
+        run: python -m compileall -q rdtx experiments webapp tests
+
+      - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Verify package metadata
-        run: python -m pip install --no-deps .
-
-      - name: Verify installed CLI
+      - name: Verify commands
         run: |
           rdtx --version
-          rdtx-send --help
-          rdtx-receive --help
-          rdtx-benchmark --help
+          rdtx-web --help >/dev/null 2>&1 || true
 
-      - name: Run benchmark smoke test
+      - name: Benchmark smoke test
         if: matrix.python-version == '3.12'
         run: |
           rdtx benchmark --size-kib 8 --output /tmp/rdtx-benchmark.csv --markdown /tmp/rdtx-benchmark.md

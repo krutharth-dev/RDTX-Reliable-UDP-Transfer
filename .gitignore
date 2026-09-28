@@ -8,5 +8,6 @@ venv/
 .pytest_cache/
 received/
 results/
+visual_lab_data/
 dist/
 build/

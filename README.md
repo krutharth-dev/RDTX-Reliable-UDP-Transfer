@@ -1,184 +1,66 @@
-# RDTX — Reliable Data Transfer over UDP
+# RDTX VisualLab — Reliable UDP Transfer & Selective Repeat Analyzer
 
-[![CI](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml/badge.svg)](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![Version](https://img.shields.io/badge/RDTX-1.3.0-blueviolet)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Project](https://img.shields.io/badge/Computer%20Networks-Mini%20Project-orange)
+RDTX VisualLab is a Computer Networks mini-project that combines a **real reliable file-transfer protocol over UDP** with a local web dashboard for live Selective Repeat analysis.
 
-**RDTX** is an educational reliable file-transfer protocol built over UDP. It makes transport-layer reliability visible by implementing the mechanisms explicitly instead of relying on TCP.
+The networking core is still RDTX: sequence numbers, individual ACKs, a strict sliding window, timeout-based retransmission, CRC32 validation, out-of-order buffering, duplicate handling and SHA-256 end-to-end verification. The VisualLab adds a browser interface that lets you run and observe those mechanisms without replacing them with a JavaScript simulation.
 
-The DATA phase uses **Selective Repeat ARQ** with a strict sender window, individual ACKs, timeout-based retransmission, CRC32 packet validation, out-of-order buffering, duplicate handling, and SHA-256 end-to-end verification.
+## Final project title
 
-## Why this is more than a UDP file-transfer script
+**RDTX VisualLab: Web-Based Reliable File Transfer and Selective Repeat Analysis over Unreliable UDP**
 
-| Networking concept | RDTX implementation |
-|---|---|
-| Reliable delivery | Per-packet ACKs and retransmission timers |
-| Sliding window | New DATA stays inside `[base, base + window_size)` |
-| Selective Repeat | Only missing/unacknowledged packets are retransmitted |
-| Packet corruption | CRC32 rejects damaged RDTX datagrams |
-| Out-of-order delivery | Receiver buffers chunks by sequence number |
-| Duplicate delivery | Duplicate DATA is re-ACKed but stored only once |
-| End-to-end integrity | SHA-256 verifies the reconstructed file |
-| Unreliable network | Loss, corruption, delay, ACK loss and explicit reordering |
-| Measurement | JSON stats plus CSV and Markdown benchmark reports |
+## What the web app shows
 
-## Architecture
+- Upload any file and transfer it through real localhost UDP sockets.
+- Configure sender window size and chunk size.
+- Inject DATA loss and ACK loss.
+- Inject corruption, delay and explicit packet reordering.
+- Watch DATA, ACK, drops, reordering and retransmission events live.
+- Watch the Selective Repeat sender window move as ACKs arrive.
+- See throughput, retransmissions, drops and final integrity.
+- Keep recent experiment history in SQLite for comparison.
+
+## Why this is still a CN project
+
+The browser is only the control/visualization layer. The transfer itself is performed by the existing Python RDTX sender and receiver over UDP. See [docs/RESEARCH_GAP.md](docs/RESEARCH_GAP.md) for the project positioning against ARQ simulators, Wireshark, ns-3 and Mininet.
+
+## Run on macOS
+
+~~~bash
+git pull origin main
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -e .
+rdtx-web
+~~~
+
+Open:
 
 ~~~text
-          +-------------------- RDTX SENDER --------------------+
-File ---> | Chunker -> SR Window -> Seq/CRC32 -> UDP TX        |
-          +------------------------------------------------------+
-                                  |
-                    loss / corruption / delay
-                       explicit reordering
-                                  |
-          +------------------- RDTX RECEIVER --------------------+
-File <--- | SHA-256 <- Reassembly <- Seq Buffer <- CRC32 check  |
-          +------------------------------------------------------+
-                                  |
-                         individual ACKs
+http://127.0.0.1:5000
 ~~~
 
-## Quick start
+The CLI remains available:
 
 ~~~bash
-git clone https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer.git
-cd RDTX-Reliable-UDP-Transfer
-python3 -m unittest discover -s tests -v
+rdtx --version
+rdtx send demo.txt --loss 0.20 --trace
+rdtx benchmark
 ~~~
 
-Terminal 1:
+## Suggested HOD demo
+
+1. Upload `demo.txt` with no impairment.
+2. Run with 20% DATA loss and 10% ACK loss; point out retransmissions.
+3. Run with 100% reordering; point out reversed DATA events and successful reconstruction.
+4. Change the Selective Repeat window and compare behavior.
+5. Open experiment history and compare retransmissions/throughput.
+6. Explain that the browser observes a real UDP transfer, not a simulated-only ARQ animation.
+
+## Verification
 
 ~~~bash
-python3 -m rdtx receive --port 9000 --output-dir received
-~~~
-
-Terminal 2:
-
-~~~bash
-python3 -m rdtx send demo.txt --host 127.0.0.1 --port 9000
-~~~
-
-The verified file appears at `received/demo.txt`.
-
-## Best classroom demos
-
-### Loss + retransmission
-
-~~~bash
-python3 -m rdtx receive --ack-loss 0.10 --seed 20 --trace
-python3 -m rdtx send demo.txt --loss 0.25 --seed 10 --trace
-~~~
-
-### Explicit out-of-order delivery
-
-~~~bash
-python3 -m rdtx receive --trace
-python3 -m rdtx send demo.txt --reorder 1.0 --seed 10 --trace
-~~~
-
-The sender intentionally transmits adjacent DATA pairs in reverse order. The receiver still reconstructs the original file from sequence numbers.
-
-### Corruption recovery
-
-~~~bash
-python3 -m rdtx send demo.txt --corrupt 0.10 --seed 42 --trace
-~~~
-
-## Unified command line
-
-~~~text
-python3 -m rdtx send ...
-python3 -m rdtx receive ...
-python3 -m rdtx benchmark ...
-~~~
-
-Useful sender controls include `--window`, `--timeout`, `--loss`, `--corrupt`, `--delay-ms`, `--reorder`, `--seed`, `--trace`, and `--stats-json`.
-
-## Benchmark and report results
-
-~~~bash
-python3 -m rdtx benchmark
-~~~
-
-This creates:
-
-~~~text
-results/benchmark.csv
-results/benchmark.md
-~~~
-
-The Markdown file is report-ready and records environment details, impairment settings, retransmissions, reordered pairs, throughput and integrity status.
-
-## One-command verification
-
-~~~bash
+make test
 make verify
 ~~~
 
-## Repository structure
-
-~~~text
-RDTX-Reliable-UDP-Transfer/
-├── rdtx/
-│   ├── cli.py
-│   ├── config.py
-│   ├── protocol.py
-│   ├── receiver.py
-│   ├── reporting.py
-│   ├── sender.py
-│   ├── simulator.py
-│   └── window.py
-├── experiments/
-│   └── benchmark.py
-├── tests/
-│   ├── test_benchmark.py
-│   ├── test_cli.py
-│   ├── test_integration.py
-│   ├── test_peer_validation.py
-│   ├── test_protocol.py
-│   ├── test_validation.py
-│   └── test_window.py
-├── docs/
-│   ├── ALGORITHMS.md
-│   ├── ARCHITECTURE.md
-│   ├── DEMO_GUIDE.md
-│   ├── EXPERIMENTS.md
-│   ├── MINI_PROJECT_REPORT.md
-│   ├── PROTOCOL.md
-│   ├── SUBMISSION_CHECKLIST.md
-│   ├── TESTING.md
-│   └── VIVA_GUIDE.md
-├── .github/workflows/tests.yml
-├── Makefile
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── demo.txt
-└── pyproject.toml
-~~~
-
-## Documentation
-
-- [Algorithms / pseudocode](docs/ALGORITHMS.md)
-- [System architecture](docs/ARCHITECTURE.md)
-- [Protocol specification](docs/PROTOCOL.md)
-- [Experiment methodology](docs/EXPERIMENTS.md)
-- [Testing strategy](docs/TESTING.md)
-- [Demo/evaluation guide](docs/DEMO_GUIDE.md)
-- [Mini-project report draft](docs/MINI_PROJECT_REPORT.md)
-- [Viva preparation](docs/VIVA_GUIDE.md)
-- [Submission checklist](docs/SUBMISSION_CHECKLIST.md)
-
-## Quality
-
-GitHub Actions verifies Python 3.10–3.13. The Python 3.12 job additionally runs a real localhost benchmark and verifies both generated result files. Expected runtime failures are presented as concise `RDTX error: ...` messages through the unified CLI rather than classroom-unfriendly tracebacks.
-
-## Scope and limitations
-
-RDTX is an educational protocol, not a TCP/QUIC replacement. It handles one active transfer per receiver process, uses a fixed retransmission timeout, buffers the complete transfer in memory, uses IPv4 sockets, and does not implement congestion control, authentication or encryption.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+GitHub Actions installs the web dependency, runs the full protocol/CLI/web suite on Python 3.10–3.13, and performs the existing benchmark smoke test.
