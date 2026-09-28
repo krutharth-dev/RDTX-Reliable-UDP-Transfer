@@ -74,7 +74,7 @@ The repository includes automated tests for packet serialization, corruption det
 
 ## 8. Experimental Evaluation
 
-Run experiments/benchmark.py to generate measurements on the actual demonstration machine. Report at least the baseline, DATA-loss, ACK-loss and corruption scenarios. Relevant metrics are elapsed time, throughput, retransmissions, drops, duplicates and checksum errors.
+Run python3 -m experiments.benchmark to generate measurements on the actual demonstration machine. Report at least the baseline, DATA-loss, ACK-loss and corruption scenarios. Relevant metrics are elapsed time, throughput, retransmissions, drops, duplicates and checksum errors.
 
 ### Results table
 
