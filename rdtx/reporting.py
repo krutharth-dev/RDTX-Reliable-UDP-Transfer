@@ -18,6 +18,11 @@ def save_stats(path: str | Path, role: str, stats: Any, **context: Any) -> Path:
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+
+    metrics: dict[str, Any] = {}
+    if hasattr(stats, "throughput_kib_s"):
+        metrics["throughput_kib_s"] = float(stats.throughput_kib_s)
+
     payload = {
         "project": "RDTX",
         "version": __version__,
@@ -25,6 +30,7 @@ def save_stats(path: str | Path, role: str, stats: Any, **context: Any) -> Path:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "context": context,
         "stats": asdict(stats),
+        "derived_metrics": metrics,
     }
     target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return target
