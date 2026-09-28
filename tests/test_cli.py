@@ -23,7 +23,7 @@ class CLITests(unittest.TestCase):
     def test_version(self):
         result = self.run_cli("--version")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("RDTX 2.0.0", result.stdout)
+        self.assertIn("RDTX 2.1.0", result.stdout)
 
     def test_send_help(self):
         result = self.run_cli("send", "--help")

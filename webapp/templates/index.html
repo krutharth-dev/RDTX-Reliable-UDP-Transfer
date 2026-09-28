@@ -3,109 +3,206 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="RDTX VisualLab — real Selective Repeat file transfer over unreliable UDP.">
   <title>RDTX VisualLab</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <div class="eyebrow">COMPUTER NETWORKS · RDTX</div>
-      <h1>Reliable UDP Transfer <span>VisualLab</span></h1>
-      <p>Run real Selective Repeat transfers over localhost UDP and watch reliability happen.</p>
+  <header class="shell topbar">
+    <div class="brand">
+      <div class="brand-mark">RX</div>
+      <div>
+        <div class="eyebrow">COMPUTER NETWORKS · RDTX {{ version }}</div>
+        <h1>Visual<span>Lab</span></h1>
+        <p>Real UDP transfer. Observable Selective Repeat. Reproducible experiments.</p>
+      </div>
     </div>
-    <div id="statusBadge" class="status idle">IDLE</div>
+    <div class="top-actions">
+      <div class="engine-pill"><i id="healthDot"></i><span id="healthText">Checking engine…</span></div>
+      <div id="statusBadge" class="status idle">IDLE</div>
+    </div>
   </header>
 
-  <main class="layout">
-    <section class="panel controls">
-      <div class="section-title">
-        <span>01</span>
-        <div><h2>Experiment controls</h2><p>Choose a file and impair the network.</p></div>
+  <main class="shell dashboard">
+    <section class="panel setup">
+      <div class="section-head">
+        <div><span class="kicker">01 / SETUP</span><h2>Experiment</h2></div>
+        <button class="ghost small" id="resetButton" type="button">Reset</button>
+      </div>
+
+      <div class="preset-row" aria-label="Scenario presets">
+        <button type="button" class="preset active" data-preset="lossy">Lossy link</button>
+        <button type="button" class="preset" data-preset="baseline">Baseline</button>
+        <button type="button" class="preset" data-preset="reorder">Reordering</button>
+        <button type="button" class="preset" data-preset="corrupt">Corruption</button>
       </div>
 
       <form id="runForm">
         <label class="file-drop">
           <input id="fileInput" name="file" type="file" required>
-          <strong>Select a file</strong>
-          <span id="fileName">No file selected</span>
+          <div class="upload-icon">↑</div>
+          <strong>Choose transfer file</strong>
+          <span id="fileName">Drop-in experiment input</span>
+          <small id="fileMeta">Maximum 32 MiB</small>
         </label>
 
-        <div class="control-grid">
-          <label>Window size<input name="window_size" type="number" min="1" max="64" value="8"></label>
-          <label>Chunk size<input name="chunk_size" type="number" min="128" max="60000" value="1024"></label>
-          <label>Timeout (ms)<input name="timeout_ms" type="number" min="20" max="5000" value="350"></label>
-          <label>Seed<input name="seed" type="number" min="0" value="2026"></label>
+        <label class="field full">Experiment label
+          <input name="label" maxlength="60" placeholder="e.g. 20% loss / window 8">
+        </label>
+
+        <div class="field-grid">
+          <label class="field">Window
+            <input name="window_size" id="windowSize" type="number" min="1" max="64" value="8">
+          </label>
+          <label class="field">Chunk bytes
+            <input name="chunk_size" id="chunkSize" type="number" min="128" max="60000" value="1024">
+          </label>
+          <label class="field">RTO (ms)
+            <input name="timeout_ms" id="timeoutMs" type="number" min="20" max="5000" value="350">
+          </label>
+          <label class="field">Seed
+            <input name="seed" id="seed" type="number" min="0" value="2026">
+          </label>
         </div>
+
+        <div class="divider"><span>Network impairment</span></div>
 
         <div class="sliders">
           <label><span>DATA loss <b id="lossValue">20%</b></span><input name="loss" id="loss" type="range" min="0" max="60" value="20"></label>
           <label><span>ACK loss <b id="ackLossValue">10%</b></span><input name="ack_loss" id="ackLoss" type="range" min="0" max="60" value="10"></label>
           <label><span>Corruption <b id="corruptionValue">0%</b></span><input name="corruption" id="corruption" type="range" min="0" max="30" value="0"></label>
           <label><span>Reordering <b id="reorderValue">0%</b></span><input name="reorder" id="reorder" type="range" min="0" max="100" value="0"></label>
-          <label><span>Max delay <b id="delayValue">0 ms</b></span><input name="delay_ms" id="delay" type="range" min="0" max="250" value="0"></label>
+          <label><span>DATA delay <b id="delayValue">0 ms</b></span><input name="delay_ms" id="delay" type="range" min="0" max="250" value="0"></label>
         </div>
 
-        <button id="startButton" type="submit">Start real UDP experiment</button>
-        <div id="formError" class="error"></div>
+        <details class="advanced">
+          <summary>Advanced ACK impairment</summary>
+          <div class="sliders advanced-body">
+            <label><span>ACK corruption <b id="ackCorruptValue">0%</b></span><input name="ack_corruption" id="ackCorrupt" type="range" min="0" max="30" value="0"></label>
+            <label><span>ACK delay <b id="ackDelayValue">0 ms</b></span><input name="ack_delay_ms" id="ackDelay" type="range" min="0" max="250" value="0"></label>
+          </div>
+        </details>
+
+        <button id="startButton" class="primary" type="submit">
+          <span>Run UDP experiment</span><span>→</span>
+        </button>
+        <div id="formError" class="error" role="alert"></div>
       </form>
     </section>
 
     <section class="panel live">
-      <div class="section-title">
-        <span>02</span>
-        <div><h2>Selective Repeat live view</h2><p>The window is driven by actual ACK events.</p></div>
+      <div class="section-head">
+        <div><span class="kicker">02 / LIVE PROTOCOL</span><h2>Selective Repeat telemetry</h2></div>
+        <div class="live-chip"><i></i>REAL UDP</div>
       </div>
 
-      <div class="metrics">
-        <article><small>Window base</small><strong id="windowBase">—</strong></article>
+      <div class="metrics six">
+        <article><small>Window base</small><strong id="windowBase">0</strong></article>
         <article><small>Retransmissions</small><strong id="retransmissions">0</strong></article>
         <article><small>Drops</small><strong id="drops">0</strong></article>
+        <article><small>ACKs</small><strong id="acks">0</strong></article>
         <article><small>Throughput</small><strong id="throughput">—</strong></article>
+        <article><small>Elapsed</small><strong id="liveElapsed">—</strong></article>
       </div>
 
-      <div class="window-wrap">
-        <div class="window-labels"><span>Sender window</span><span id="windowRange">waiting</span></div>
+      <div class="path">
+        <div class="path-node"><span>SENDER</span><strong>Selective Repeat</strong></div>
+        <div class="path-link"><span>UDP</span><div></div></div>
+        <div class="path-node"><span>RECEIVER</span><strong>Buffer + ACK</strong></div>
+      </div>
+
+      <div class="window-card">
+        <div class="window-title">
+          <div><small>Sender window</small><strong id="windowRange">[0, 8)</strong></div>
+          <span id="windowCaption">Sequence-space view</span>
+        </div>
         <div id="windowStrip" class="window-strip"></div>
       </div>
 
-      <div class="event-header"><h3>Protocol timeline</h3><button id="clearLog" type="button">Clear</button></div>
+      <div class="timeline-head">
+        <div>
+          <h3>Protocol timeline</h3>
+          <p>Events streamed from the actual Python sender and receiver.</p>
+        </div>
+        <button id="clearLog" type="button" class="ghost small">Clear</button>
+      </div>
+      <div class="filters" id="eventFilters">
+        <button class="filter active" data-kind="all">All</button>
+        <button class="filter" data-kind="data">DATA</button>
+        <button class="filter" data-kind="ack">ACK</button>
+        <button class="filter" data-kind="retransmission">Retry</button>
+        <button class="filter" data-kind="drop">Drop</button>
+        <button class="filter" data-kind="reorder">Reorder</button>
+      </div>
       <div id="timeline" class="timeline">
-        <div class="empty">Start an experiment to stream packet events.</div>
+        <div class="empty-state">Start an experiment to stream protocol events.</div>
       </div>
     </section>
 
-    <section class="panel result">
-      <div class="section-title">
-        <span>03</span>
-        <div><h2>Result</h2><p>End-to-end outcome from the completed transfer.</p></div>
+    <section class="panel outcome">
+      <div class="section-head">
+        <div><span class="kicker">03 / OUTCOME</span><h2>Run inspector</h2></div>
       </div>
-      <div id="resultEmpty" class="result-empty">No completed experiment yet.</div>
-      <div id="resultBody" class="result-body hidden">
-        <div class="integrity"><span>File integrity</span><strong id="integrity">—</strong></div>
-        <dl>
-          <div><dt>Elapsed</dt><dd id="elapsed">—</dd></div>
-          <div><dt>Packets sent</dt><dd id="packetsSent">—</dd></div>
-          <div><dt>Retransmissions</dt><dd id="resultRetrans">—</dd></div>
-          <div><dt>Reordered pairs</dt><dd id="resultReorder">—</dd></div>
-        </dl>
+      <div id="resultEmpty" class="empty-state tall">A completed run will appear here.</div>
+      <div id="resultBody" class="hidden">
+        <div class="integrity-card">
+          <div><small>END-TO-END INTEGRITY</small><strong id="integrity">PASS</strong></div>
+          <div class="check">✓</div>
+        </div>
+        <div class="result-grid">
+          <div><small>Elapsed</small><strong id="elapsed">—</strong></div>
+          <div><small>Packets sent</small><strong id="packetsSent">—</strong></div>
+          <div><small>Retransmissions</small><strong id="resultRetrans">—</strong></div>
+          <div><small>Reordered pairs</small><strong id="resultReorder">—</strong></div>
+          <div><small>ACK drops</small><strong id="ackDrops">—</strong></div>
+          <div><small>Duplicates</small><strong id="duplicates">—</strong></div>
+        </div>
+        <div id="configSummary" class="config-summary"></div>
+        <div class="result-actions">
+          <a id="downloadFile" class="button-link primary" href="#" download>Download received file</a>
+          <a id="exportRun" class="button-link ghost" href="#" download>Export JSON</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel compare">
+      <div class="section-head">
+        <div><span class="kicker">04 / COMPARE</span><h2>Recent experiment comparison</h2></div>
+        <a class="button-link ghost small" href="/api/history.csv" download>Export CSV</a>
+      </div>
+      <div class="compare-grid">
+        <div>
+          <div class="compare-title"><span>Throughput</span><small>KiB/s</small></div>
+          <div id="throughputBars" class="bars"></div>
+        </div>
+        <div>
+          <div class="compare-title"><span>Retransmissions</span><small>count</small></div>
+          <div id="retryBars" class="bars"></div>
+        </div>
       </div>
     </section>
 
     <section class="panel history">
-      <div class="section-title">
-        <span>04</span>
-        <div><h2>Experiment history</h2><p>Compare recent impairment configurations.</p></div>
+      <div class="section-head">
+        <div><span class="kicker">05 / HISTORY</span><h2>Experiment log</h2></div>
+        <small id="historyCount">0 runs</small>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>File</th><th>Status</th><th>Loss</th><th>Window</th><th>Retrans.</th><th>Integrity</th></tr></thead>
+          <thead>
+            <tr><th>Scenario</th><th>File</th><th>Status</th><th>Loss</th><th>Window</th><th>Retrans.</th><th>Throughput</th><th>Integrity</th><th></th></tr>
+          </thead>
           <tbody id="historyBody"></tbody>
         </table>
       </div>
     </section>
   </main>
 
-  <footer>RDTX VisualLab · Real UDP sockets · Selective Repeat ARQ · Local-first</footer>
+  <footer class="shell footer">
+    <span>RDTX VisualLab {{ version }}</span>
+    <span>Real UDP sockets · Selective Repeat ARQ · Local-first</span>
+  </footer>
+
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
