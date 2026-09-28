@@ -1,41 +1,53 @@
-# RDTX Viva Guide
+# RDTX VisualLab Viva Guide
 
-## What problem does RDTX solve?
+## Is this a website project or a Computer Networks project?
 
-UDP does not guarantee reliable delivery, ordering, duplicate suppression or retransmission. RDTX adds those mechanisms at the application layer.
+It is a Computer Networks project with a web visualization layer. The actual file transfer uses Python UDP sockets. Flask only configures the experiment and streams protocol events to the browser.
 
-## Which ARQ technique is used?
+## Why UDP?
 
-Selective Repeat. New packets stay within `[base, base + window_size)`, individual packets are ACKed, out-of-order ACKs are remembered, and only timed-out missing packets are retransmitted.
+UDP does not provide retransmission, ordering or duplicate suppression. That makes the reliability mechanisms explicit and demonstrable.
 
-## What if DATA 4 is lost but 5 and 6 arrive?
+## Which ARQ protocol is used?
 
-The receiver buffers and ACKs 5 and 6. The sender base cannot slide past 4. When 4 times out, only DATA 4 is retransmitted.
+Selective Repeat. The sender keeps multiple packets in flight, ACKs are per sequence number, the receiver buffers valid out-of-order packets, and only timed-out packets are retransmitted.
 
-## What if an ACK is lost?
+## What is the exact sender-window rule?
 
-The sender retransmits that DATA after timeout. The receiver detects a duplicate, does not store it twice, and ACKs it again.
+New sequence numbers can enter only inside `[base, base + window_size)`. Out-of-order ACKs are remembered, but the base cannot advance past a missing lower sequence number.
 
-## How do you demonstrate out-of-order delivery?
+## What happens if packet 4 is lost and 5/6 arrive?
 
-Use `--reorder 1.0`. RDTX intentionally sends adjacent DATA pairs in reverse sequence order. The receiver reconstructs the file using sequence numbers rather than arrival order.
+The receiver stores and ACKs 5 and 6. The sender still waits for 4. When 4 times out, only 4 is retransmitted.
+
+## What happens if an ACK is lost?
+
+The sender times out and retransmits that DATA. The receiver recognizes the duplicate, does not store it twice, and sends the ACK again.
 
 ## Why CRC32 and SHA-256?
 
-CRC32 detects corruption at the individual RDTX datagram level. SHA-256 verifies end-to-end integrity of the complete reconstructed file.
+CRC32 checks each RDTX datagram for corruption. SHA-256 verifies the final reconstructed file end-to-end.
 
-## Why UDP instead of TCP?
+## How is reordering demonstrated?
 
-TCP would hide the reliability mechanisms the project is intended to demonstrate.
+The sender can intentionally send adjacent DATA pairs in reverse order. This produces real out-of-order UDP sends while preserving the same packet format.
 
-## Why is the timeout fixed?
+## What does the web app add technically?
 
-A fixed timeout keeps the mini-project deterministic and explainable. Adaptive RTT/RTO estimation is a realistic future enhancement.
+It adds experiment configuration, live Server-Sent Events, Selective Repeat visualization, metrics and SQLite history while reusing the real protocol engine.
 
-## Is RDTX the same as TCP?
+## What research gap are you claiming?
 
-No. RDTX demonstrates Selective Repeat reliability but does not implement TCP stream semantics, congestion control, adaptive timers, connection multiplexing or TCP's full state machine.
+Not protocol novelty. The claimed gap is integrated educational observability: real UDP transfer, controlled impairment, live ARQ-specific visualization and stored experiments in one lightweight local tool.
 
-## Best live demo
+## Why not just use Wireshark?
 
-Show a normal transfer, a lossy transfer, explicit reordering, and finally `results/benchmark.md`.
+Wireshark is excellent for packet analysis, but it is a general analyzer. VisualLab provides controls and interpretations specific to this protocol experiment. Wireshark can be complementary.
+
+## Why not ns-3 or Mininet?
+
+They are broader simulation/emulation environments. This project intentionally provides a narrow, easy-to-demo environment for one transport reliability problem.
+
+## Limitations?
+
+Single-machine experiments by default, fixed retransmission timeout, full-file buffering, IPv4, no congestion control, and no encryption/authentication.
