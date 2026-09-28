@@ -34,6 +34,16 @@ jobs:
       - name: Verify package metadata
         run: python -m pip install --no-deps .
 
+      - name: Verify installed CLI
+        run: |
+          rdtx --version
+          rdtx-send --help
+          rdtx-receive --help
+          rdtx-benchmark --help
+
       - name: Run benchmark smoke test
         if: matrix.python-version == '3.12'
-        run: python -m experiments.benchmark --size-kib 8 --output /tmp/rdtx-benchmark.csv
+        run: |
+          rdtx benchmark --size-kib 8 --output /tmp/rdtx-benchmark.csv --markdown /tmp/rdtx-benchmark.md
+          test -s /tmp/rdtx-benchmark.csv
+          test -s /tmp/rdtx-benchmark.md

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import random
 import secrets
 import socket
 import time
@@ -42,6 +43,7 @@ class SenderStats:
     ack_packets: int = 0
     checksum_errors: int = 0
     foreign_datagrams_ignored: int = 0
+    reordered_pairs: int = 0
     elapsed: float = 0.0
 
     @property
@@ -71,6 +73,7 @@ class RDTXSender:
         loss: float = 0.0,
         corruption: float = 0.0,
         delay_ms: float = 0.0,
+        reorder_rate: float = 0.0,
         seed: int | None = None,
         verbose: bool = True,
         trace: bool = False,
@@ -85,6 +88,8 @@ class RDTXSender:
             raise ValueError("timeout must be > 0")
         if max_retries < 1:
             raise ValueError("max_retries must be >= 1")
+        if not 0.0 <= reorder_rate <= 1.0:
+            raise ValueError("reorder_rate must be between 0 and 1")
 
         try:
             resolved_host = socket.gethostbyname(host)
@@ -99,6 +104,9 @@ class RDTXSender:
         self.max_retries = max_retries
         self.verbose = verbose
         self.trace = trace
+        self.reorder_rate = reorder_rate
+        reorder_seed = None if seed is None else seed ^ 0x5A17
+        self._reorder_rng = random.Random(reorder_seed)
         self.simulator = LossSimulator(loss, corruption, delay_ms, seed)
         self.stats = SenderStats()
 
@@ -150,6 +158,23 @@ class RDTXSender:
             )
             raise ProtocolError("unexpected UDP peer")
         return incoming
+
+    def _send_data(
+        self,
+        sock: socket.socket,
+        session_id: int,
+        seq: int,
+        payload: bytes,
+        inflight: dict[int, InFlight],
+    ) -> None:
+        raw = Packet(
+            PacketType.DATA,
+            session_id,
+            seq=seq,
+            payload=payload,
+        ).encode()
+        self._send(sock, raw, label=f"DATA seq={seq}")
+        inflight[seq] = InFlight(raw=raw, sent_at=time.monotonic())
 
     def _exchange_control(
         self,
@@ -256,15 +281,28 @@ class RDTXSender:
 
             while not window.complete:
                 while window.can_send:
-                    seq = window.take_next()
-                    raw = Packet(
-                        PacketType.DATA,
-                        session_id,
-                        seq=seq,
-                        payload=chunks[seq],
-                    ).encode()
-                    self._send(sock, raw, label=f"DATA seq={seq}")
-                    inflight[seq] = InFlight(raw=raw, sent_at=time.monotonic())
+                    first_seq = window.take_next()
+                    should_reorder = (
+                        self.reorder_rate > 0.0
+                        and window.can_send
+                        and self._reorder_rng.random() < self.reorder_rate
+                    )
+                    if should_reorder:
+                        second_seq = window.take_next()
+                        self.stats.reordered_pairs += 1
+                        self._trace(
+                            f"REORDER pair: DATA seq={second_seq} sent before seq={first_seq}"
+                        )
+                        self._send_data(
+                            sock, session_id, second_seq, chunks[second_seq], inflight
+                        )
+                        self._send_data(
+                            sock, session_id, first_seq, chunks[first_seq], inflight
+                        )
+                    else:
+                        self._send_data(
+                            sock, session_id, first_seq, chunks[first_seq], inflight
+                        )
 
                 try:
                     incoming = self._receive_from_peer(sock)
@@ -288,7 +326,9 @@ class RDTXSender:
                                 f"range=[{window.base},{window.upper_bound})"
                             )
                         else:
-                            self._trace(f"RX duplicate/out-of-window ACK seq={packet.ack} -> ignored")
+                            self._trace(
+                                f"RX duplicate/out-of-window ACK seq={packet.ack} -> ignored"
+                            )
                 except socket.timeout:
                     pass
                 except ChecksumError:
@@ -330,6 +370,7 @@ class RDTXSender:
             f"Simulated drops : {self.stats.simulated_drops}\n"
             f"Corruptions     : {self.stats.simulated_corruptions}\n"
             f"Foreign ignored : {self.stats.foreign_datagrams_ignored}\n"
+            f"Reordered pairs : {self.stats.reordered_pairs}\n"
             f"Throughput      : {self.stats.throughput_kib_s:.1f} KiB/s\n"
             f"SHA-256         : {digest}"
         )
@@ -361,6 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--loss", type=probability, default=0.0, help="simulated outgoing loss probability")
     parser.add_argument("--corrupt", type=probability, default=0.0, help="simulated outgoing corruption probability")
     parser.add_argument("--delay-ms", type=non_negative_float, default=0.0, help="maximum simulated outgoing delay")
+    parser.add_argument("--reorder", type=probability, default=0.0, help="probability of reversing adjacent DATA packet pairs")
     parser.add_argument("--seed", type=int, default=None, help="random seed for repeatable impairment simulation")
     parser.add_argument("--stats-json", metavar="PATH", help="write transfer statistics to a JSON file")
     output = parser.add_mutually_exclusive_group()
@@ -381,6 +423,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         loss=args.loss,
         corruption=args.corrupt,
         delay_ms=args.delay_ms,
+        reorder_rate=args.reorder,
         seed=args.seed,
         verbose=not args.quiet,
         trace=args.trace,
@@ -399,6 +442,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             loss=args.loss,
             corruption=args.corrupt,
             max_delay_ms=args.delay_ms,
+            reorder=args.reorder,
             seed=args.seed,
         )
         if not args.quiet:

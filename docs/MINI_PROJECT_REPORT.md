@@ -2,126 +2,62 @@
 
 ## Abstract
 
-RDTX is a computer networks mini-project that implements reliable file transfer over UDP. UDP offers low-overhead datagram delivery but does not guarantee that packets arrive, arrive in order, or arrive only once. RDTX introduces application-layer reliability using sequence numbers, Selective Repeat acknowledgements, sliding-window transmission, timeout-based retransmission, CRC32 corruption detection, out-of-order buffering, duplicate handling, and SHA-256 end-to-end verification. A configurable network impairment simulator introduces controlled packet loss, corruption and delay, allowing the protocol to be evaluated under repeatable conditions.
+RDTX is a Computer Networks mini-project that implements reliable file transfer over UDP. It adds Selective Repeat sequencing, individual acknowledgements, a strict sliding window, timeout-based retransmission, CRC32 datagram validation, out-of-order buffering, duplicate handling and SHA-256 end-to-end verification. Controlled loss, corruption, delay, ACK loss and explicit packet reordering allow repeatable demonstrations and measurements.
 
-## 1. Problem Statement
+## Problem Statement
 
-File transfer requires correctness even when individual network datagrams are lost, delayed, duplicated, reordered or corrupted. The problem addressed by this project is to design and demonstrate a reliable transfer mechanism while intentionally using UDP as the underlying transport service.
+Reliable file transfer must remain correct when datagrams are lost, delayed, duplicated, corrupted or delivered out of order. RDTX demonstrates how those reliability properties can be built above UDP.
 
-## 2. Objectives
+## Objectives
 
 - Build sender and receiver applications using UDP sockets.
-- Design a compact custom packet format.
-- Implement sequence numbers and acknowledgements.
-- Implement Selective Repeat sliding-window transfer.
-- Recover from packet and ACK loss through retransmission.
-- Detect corrupted packets using CRC32.
-- Reassemble out-of-order chunks correctly.
-- Verify final file integrity using SHA-256.
-- Simulate unreliable network conditions reproducibly.
-- Measure retransmissions, errors and throughput.
+- Implement a custom packet header with sequence and acknowledgement fields.
+- Implement Selective Repeat ARQ.
+- Recover from DATA and ACK loss.
+- Detect corruption with CRC32.
+- Buffer and reassemble out-of-order chunks.
+- Verify the completed file with SHA-256.
+- Simulate network impairments reproducibly.
+- Measure retransmissions, reordered pairs, errors and throughput.
 
-## 3. Requirements
+## Methodology
 
-### Software
+The sender divides a file into numbered chunks and permits new DATA only inside `[base, base + window_size)`. ACKs may arrive out of order, but the base advances only across a contiguous acknowledged prefix. Per-packet timers cause targeted retransmission. The receiver verifies CRC32, validates sequence and payload length, buffers chunks by sequence number, re-ACKs duplicates, and performs SHA-256 verification before accepting the file.
 
-- Python 3.10 or later
-- Standard Python library only
-- macOS, Linux or Windows
-- Git for version control
+## Testing
 
-### Hardware
+Automated tests cover packet serialization, corruption, malformed datagrams, metadata, CLI behavior, statistics, strict window movement, peer validation, empty files, explicit reordering, normal transfer and deterministic packet/ACK loss. CI runs on Python 3.10–3.13.
 
-Two separate machines may be used over a LAN, but one laptop with two terminal windows is sufficient for demonstration because sender and receiver communicate through UDP sockets.
+## Experimental Evaluation
 
-## 4. Methodology
+Run:
 
-The input file is divided into fixed-size chunks. Each chunk is placed in a DATA packet with a sequence number and CRC32. The sender maintains a Selective Repeat base and permits new sequence numbers only inside `[base, base + window_size)`. The receiver independently acknowledges valid sequence numbers and buffers packets that arrive out of order. A timer is associated with each outstanding packet; expiration causes only that packet to be retransmitted.
+~~~bash
+python3 -m rdtx benchmark
+~~~
 
-Before data transfer, HELLO/HELLO_ACK establishes transfer metadata. After all DATA packets have been acknowledged, FIN/FIN_ACK completes the session. The receiver then validates the reconstructed file against the advertised byte count and SHA-256 digest.
+Use `results/benchmark.md` in the report. It contains baseline, loss, combined DATA/ACK loss, corruption and explicit reordering scenarios.
 
-## 5. Packet Structure
+## Advantages
 
-The fixed RDTX header contains magic bytes, protocol version, packet type, flags, session ID, sequence number, acknowledgement number, payload length and CRC32. Detailed field sizes are documented in PROTOCOL.md.
+- Core transport concepts are visible in code and trace output.
+- Pipelining and targeted retransmission are demonstrable.
+- Both per-packet and final-file integrity are checked.
+- Experiments are deterministic with fixed seeds.
+- No third-party runtime dependencies are required.
 
-## 6. Algorithms
+## Limitations
 
-### Sender
+- One active receiver session per process.
+- Complete transfer buffered in memory.
+- Fixed retransmission timeout.
+- IPv4 only.
+- No congestion control, encryption or authentication.
 
-1. Read the file and calculate SHA-256.
-2. Split it into chunks.
-3. Send HELLO and wait for HELLO_ACK.
-4. Fill the sliding window with DATA packets.
-5. Remove packets from the outstanding set as ACKs arrive.
-6. Retransmit individual timed-out packets.
-7. Send FIN after every DATA sequence number is acknowledged.
-8. Finish after FIN_ACK.
+## Future Scope
 
-### Receiver
+Adaptive RTT/RTO, streaming large files, multiple concurrent sessions, IPv6, flow/congestion control, and optional authenticated encryption.
 
-1. Validate HELLO metadata.
-2. Accept DATA packets belonging to the active session.
-3. Verify CRC32 before protocol processing.
-4. Validate sequence number and expected chunk length.
-5. Buffer each new sequence number once.
-6. ACK every valid DATA packet, including duplicates.
-7. On FIN, verify that all chunks exist.
-8. Reassemble the file, verify size and SHA-256, write it to disk and send FIN_ACK.
+## Conclusion
 
-## 7. Testing
-
-The repository includes automated tests for packet serialization, corruption detection, malformed packets, metadata consistency, CLI behavior, statistics export, strict Selective Repeat window movement, peer validation, empty-file transfer, ordinary end-to-end transfer, and deterministic packet/ACK loss. GitHub Actions runs the suite on Python 3.10–3.13.
-
-## 8. Experimental Evaluation
-
-Run python3 -m experiments.benchmark to generate measurements on the actual demonstration machine. Report at least the baseline, DATA-loss, ACK-loss and corruption scenarios. Relevant metrics are elapsed time, throughput, retransmissions, drops, duplicates and checksum errors.
-
-### Results table
-
-| Scenario | Loss/Corruption | Retransmissions | Throughput | Integrity |
-|---|---|---:|---:|---|
-| Baseline | Record measured values | | | PASS |
-| DATA loss | Record measured values | | | PASS |
-| DATA + ACK loss | Record measured values | | | PASS |
-| Corruption | Record measured values | | | PASS |
-
-Populate this table using results generated on the project laptop rather than invented values.
-
-## 9. Advantages
-
-- Makes transport reliability mechanisms visible and testable.
-- Demonstrates pipelining through a sliding window.
-- Recovers from both DATA and ACK loss.
-- Supports reproducible impairment simulation.
-- Uses no third-party runtime libraries.
-- Includes automatic integrity verification and test automation.
-
-## 10. Limitations
-
-- One transfer/session is handled by a receiver process at a time.
-- The complete file/chunk set is held in memory.
-- Retransmission timeout is fixed rather than adaptive.
-- Congestion control and production-grade flow control are not implemented.
-- The protocol is not encrypted or authenticated.
-- IPv4 is used by the current socket implementation.
-
-## 11. Future Scope
-
-- Adaptive RTT/RTO calculation.
-- Receiver-advertised flow control.
-- Congestion-control experiments.
-- Streaming large files without buffering the full transfer.
-- Multiple simultaneous sessions.
-- IPv6 support.
-- Authentication/encryption for secure transfer.
-- GUI visualization of window movement and packet loss.
-
-## 12. Conclusion
-
-RDTX demonstrates that reliable delivery can be constructed over an unreliable datagram service by combining sequencing, acknowledgements, timers, retransmission, buffering and integrity checks. Because the implementation exposes each mechanism directly, it provides a practical demonstration of concepts normally studied in the transport-layer portion of Computer Networks.
-
-## References
-
-- J. F. Kurose and K. W. Ross, Computer Networking: A Top-Down Approach.
-- RFC 768, User Datagram Protocol.
-- Python documentation: socket module.
+RDTX demonstrates that reliable delivery can be constructed over an unreliable datagram service using sequencing, acknowledgements, windows, timers, retransmission, buffering and integrity checks.

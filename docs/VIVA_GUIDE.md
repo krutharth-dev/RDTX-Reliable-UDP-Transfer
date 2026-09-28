@@ -2,56 +2,40 @@
 
 ## What problem does RDTX solve?
 
-UDP does not guarantee delivery, ordering, duplicate suppression or retransmission. RDTX adds these reliability mechanisms at the application layer so their behavior can be studied directly.
-
-## Why use UDP instead of TCP?
-
-Using TCP would hide the main learning objective because TCP already performs sequencing, acknowledgements and retransmissions. UDP gives a minimal datagram service on which RDTX can implement those mechanisms explicitly.
+UDP does not guarantee reliable delivery, ordering, duplicate suppression or retransmission. RDTX adds those mechanisms at the application layer.
 
 ## Which ARQ technique is used?
 
-RDTX uses Selective Repeat ARQ. Multiple packets may be outstanding, the receiver ACKs individual sequence numbers, and the sender retransmits only packets whose ACKs are missing after timeout. The sender window is strictly bounded by `[base, base + window_size)`.
+Selective Repeat. New packets stay within `[base, base + window_size)`, individual packets are ACKed, out-of-order ACKs are remembered, and only timed-out missing packets are retransmitted.
 
-## What makes the implementation Selective Repeat rather than only "multiple packets in flight"?
+## What if DATA 4 is lost but 5 and 6 arrive?
 
-The sender keeps a base sequence number. New packets can enter only while their sequence number is below `base + window_size`. ACKs may arrive out of order, but the base cannot advance past a missing lower sequence number. Retransmission is per packet rather than retransmitting the entire later range.
+The receiver buffers and ACKs 5 and 6. The sender base cannot slide past 4. When 4 times out, only DATA 4 is retransmitted.
 
-## Why is a sliding window required?
+## What if an ACK is lost?
 
-A window allows multiple packets to be in flight at the same time. This provides pipelining and demonstrates a key difference from Stop-and-Wait.
+The sender retransmits that DATA after timeout. The receiver detects a duplicate, does not store it twice, and ACKs it again.
 
-## What happens if DATA packet 4 is lost but packets 5 and 6 arrive?
+## How do you demonstrate out-of-order delivery?
 
-The receiver buffers 5 and 6 and ACKs them. Packet 4 remains unacknowledged. When its timer expires, the sender retransmits only packet 4.
+Use `--reorder 1.0`. RDTX intentionally sends adjacent DATA pairs in reverse sequence order. The receiver reconstructs the file using sequence numbers rather than arrival order.
 
-## What happens if an ACK is lost?
+## Why CRC32 and SHA-256?
 
-The sender eventually times out and retransmits that DATA packet. The receiver recognizes it as a duplicate, does not store it twice, and sends the ACK again.
+CRC32 detects corruption at the individual RDTX datagram level. SHA-256 verifies end-to-end integrity of the complete reconstructed file.
 
-## Why use CRC32 and SHA-256?
+## Why UDP instead of TCP?
 
-CRC32 performs packet-level corruption detection for each datagram. SHA-256 performs an end-to-end integrity check on the fully reconstructed file. They operate at different scopes.
-
-## Does UDP itself corrupt packets?
-
-IP/UDP includes checksum mechanisms, and real networks can discard damaged packets. The project injects corruption deliberately so the application-level CRC/recovery behavior can be demonstrated consistently.
+TCP would hide the reliability mechanisms the project is intended to demonstrate.
 
 ## Why is the timeout fixed?
 
-A fixed timeout keeps the mini-project understandable and repeatable. Production protocols normally estimate round-trip time dynamically; adaptive RTT/RTO calculation is a valid future enhancement.
+A fixed timeout keeps the mini-project deterministic and explainable. Adaptive RTT/RTO estimation is a realistic future enhancement.
 
-## Is this a replacement for TCP?
+## Is RDTX the same as TCP?
 
-No. RDTX intentionally focuses on reliability concepts. It does not implement congestion control, security, production flow control, connection multiplexing, or the many optimizations present in mature transport protocols.
+No. RDTX demonstrates Selective Repeat reliability but does not implement TCP stream semantics, congestion control, adaptive timers, connection multiplexing or TCP's full state machine.
 
-## Why call it Selective Repeat-style rather than claiming full TCP-like reliability?
+## Best live demo
 
-Selective Repeat describes the ARQ behavior used for the DATA phase. RDTX is a custom educational protocol with a simpler control model, so describing exactly what is implemented is more accurate than calling it TCP-like.
-
-## What should be shown in the live demo?
-
-1. Transfer demo.txt with no loss.
-2. Repeat with trace mode and 20–25% simulated packet loss.
-3. Point out a dropped sequence number, timeout and targeted retransmission.
-4. Show TRANSFER COMPLETE and matching SHA-256.
-5. Run the benchmark and open results/benchmark.csv if time permits.
+Show a normal transfer, a lossy transfer, explicit reordering, and finally `results/benchmark.md`.
