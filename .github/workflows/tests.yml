@@ -33,3 +33,7 @@ jobs:
 
       - name: Verify package metadata
         run: python -m pip install --no-deps .
+
+      - name: Run benchmark smoke test
+        if: matrix.python-version == '3.12'
+        run: python -m experiments.benchmark --size-kib 8 --output /tmp/rdtx-benchmark.csv
