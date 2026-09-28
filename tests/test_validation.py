@@ -45,7 +45,7 @@ class ValidationTests(unittest.TestCase):
             payload = json.loads(target.read_text(encoding="utf-8"))
 
             self.assertEqual(payload["project"], "RDTX")
-            self.assertEqual(payload["version"], "1.3.0")
+            self.assertEqual(payload["version"], "2.0.0")
             self.assertEqual(payload["role"], "sender")
             self.assertEqual(payload["context"]["scenario"], "unit-test")
             self.assertEqual(payload["stats"]["file_bytes"], 100)

@@ -1,21 +1,23 @@
 PYTHON ?= python3
 
-.PHONY: help check test benchmark verify demo-receive demo-send demo-lossy demo-reorder clean
+.PHONY: help install web check test benchmark verify clean
 
 help:
-	@echo "RDTX developer commands"
-	@echo "  make check         Compile Python sources"
-	@echo "  make test          Run the complete test suite"
-	@echo "  make benchmark     Generate CSV + Markdown experiment results"
-	@echo "  make verify        Run tests and benchmark together"
-	@echo "  make demo-receive  Start a localhost receiver with packet tracing"
-	@echo "  make demo-send     Send demo.txt with packet tracing"
-	@echo "  make demo-lossy    Send demo.txt with 25% simulated packet loss"
-	@echo "  make demo-reorder  Send demo.txt with explicit packet reordering"
-	@echo "  make clean         Remove generated caches, received files and results"
+	@echo "RDTX VisualLab"
+	@echo "  make install    Install project in editable mode"
+	@echo "  make web        Start the local web dashboard"
+	@echo "  make test       Run protocol + CLI + web tests"
+	@echo "  make benchmark  Generate experiment benchmark files"
+	@echo "  make verify     Run tests and benchmark"
+
+install:
+	$(PYTHON) -m pip install -e .
+
+web:
+	$(PYTHON) -m webapp.app
 
 check:
-	$(PYTHON) -m compileall -q rdtx tests experiments
+	$(PYTHON) -m compileall -q rdtx experiments webapp tests
 
 test: check
 	$(PYTHON) -m unittest discover -s tests -v
@@ -25,18 +27,6 @@ benchmark:
 
 verify: test benchmark
 
-demo-receive:
-	$(PYTHON) -m rdtx receive --port 9000 --output-dir received --trace
-
-demo-send:
-	$(PYTHON) -m rdtx send demo.txt --host 127.0.0.1 --port 9000 --trace
-
-demo-lossy:
-	$(PYTHON) -m rdtx send demo.txt --host 127.0.0.1 --port 9000 --loss 0.25 --seed 10 --trace
-
-demo-reorder:
-	$(PYTHON) -m rdtx send demo.txt --host 127.0.0.1 --port 9000 --reorder 1.0 --seed 10 --trace
-
 clean:
-	rm -rf received results .pytest_cache build dist *.egg-info
+	rm -rf received results visual_lab_data .pytest_cache build dist *.egg-info
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

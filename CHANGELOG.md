@@ -1,22 +1,26 @@
 # Changelog
 
-## 1.3.0 — Demonstration and reporting polish
+## 2.0.0 — RDTX VisualLab
 
 ### Added
 
-- Explicit DATA-packet reordering simulation with `--reorder`.
-- Reordering counters and trace events.
-- `rdtx benchmark` in the unified CLI.
-- Report-ready Markdown benchmark output alongside CSV.
-- Reordering integration tests and benchmark-report tests.
-- Clean runtime error messages on the unified CLI.
+- Local Flask web dashboard for running real RDTX transfers from a browser.
+- Live Server-Sent Events stream for sender/receiver protocol activity.
+- Selective Repeat window visualization driven by real ACK events.
+- File upload, impairment controls, metrics and experiment history.
+- SQLite-backed experiment persistence.
+- Web integration test that completes a real localhost UDP transfer.
+- Research-gap document positioning the project against ARQ simulators, Wireshark, ns-3 and Mininet.
+- `rdtx-web` launcher with proper `--host`, `--port`, `--help` and `--version`.
 
-### Improved
+### Preserved
 
-- Benchmark includes a deterministic reordering scenario.
-- README, experiments, demo, report, testing and viva material match the implemented features.
-- Makefile and README formatting defects were corrected.
-- The experiments package is included in the installable project.
+- The original RDTX protocol engine remains the networking core.
+- CLI transfer, benchmarking, Selective Repeat, CRC32, SHA-256, loss/corruption/reordering simulation and tests remain available.
+
+## 1.3.0 — Demonstration and reporting polish
+
+- Added explicit packet reordering, report-ready benchmark output and cleaner CLI behavior.
 
 ## 1.2.0 — Protocol hardening
 

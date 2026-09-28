@@ -1,44 +1,72 @@
-# RDTX Demonstration Guide
+# RDTX VisualLab Demonstration Guide
 
-## 1. Normal transfer
-
-~~~bash
-python3 -m rdtx receive
-python3 -m rdtx send demo.txt
-~~~
-
-## 2. Loss and retransmission
+## Before evaluation
 
 ~~~bash
-python3 -m rdtx receive --ack-loss 0.10 --seed 20 --trace
-python3 -m rdtx send demo.txt --loss 0.25 --seed 10 --trace
+git pull origin main
+source .venv/bin/activate
+python3 -m pip install -e .
+make test
 ~~~
 
-Point out sequence numbers, independent ACKs, window-base movement, drops and targeted retransmissions.
-
-## 3. Explicit packet reordering
+Start the dashboard:
 
 ~~~bash
-python3 -m rdtx receive --trace
-python3 -m rdtx send demo.txt --reorder 1.0 --seed 10 --trace
+rdtx-web
 ~~~
 
-Look for `REORDER pair`. Explain that DATA pairs are intentionally sent in reverse order while the receiver buffers by sequence number.
+Open:
 
-## 4. Corruption recovery
-
-~~~bash
-python3 -m rdtx send demo.txt --corrupt 0.10 --seed 42 --trace
+~~~text
+http://127.0.0.1:5000
 ~~~
 
-CRC32 rejects damaged RDTX datagrams; missing ACKs trigger recovery.
+## Demo 1 — Baseline
 
-## 5. Results
+Upload `demo.txt`.
 
-~~~bash
-python3 -m rdtx benchmark
-~~~
+Use:
 
-Open `results/benchmark.md` and explain the measured scenarios.
+- Window: 8
+- DATA loss: 0%
+- ACK loss: 0%
+- Corruption: 0%
+- Reordering: 0%
 
-Use the unified `python3 -m rdtx ...` commands during evaluation because expected runtime failures are shown as concise errors rather than Python tracebacks.
+Start the experiment and point out DATA/ACK events, sender-window movement and PASS integrity.
+
+## Demo 2 — Loss recovery
+
+Use:
+
+- DATA loss: 20%
+- ACK loss: 10%
+- Seed: 2026
+
+Point out dropped packets, timeout-triggered retransmissions and duplicates caused by lost ACKs.
+
+## Demo 3 — Out-of-order delivery
+
+Set reordering to 100%.
+
+Point out sender REORDER events and show that integrity still finishes as PASS because the receiver buffers by sequence number.
+
+## Demo 4 — Corruption
+
+Set corruption to 10%.
+
+Explain that corrupted RDTX datagrams fail CRC32 validation and are recovered because missing ACKs cause retransmission.
+
+## Demo 5 — Window behavior
+
+Repeat the same file with window 1, 4, 8 and 16. Explain the difference between Stop-and-Wait-like behavior and pipelined Selective Repeat.
+
+## What to say in two minutes
+
+> RDTX VisualLab does not simulate the transport in JavaScript. The browser configures a real Python UDP sender and receiver. The sender implements Selective Repeat with a strict sliding window and individual packet timers. The receiver validates CRC32, buffers out-of-order chunks and acknowledges each valid sequence number. The dashboard streams those real protocol events live and stores experiment results for comparison. Final SHA-256 verification proves that the received file is identical.
+
+## If something goes wrong
+
+- If port 5000 is occupied: `rdtx-web --port 5050`.
+- If dependencies are missing: `python3 -m pip install -e .`.
+- If the browser does not open automatically, manually open the printed localhost URL.
