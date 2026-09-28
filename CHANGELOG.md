@@ -1,36 +1,38 @@
 # Changelog
 
-## 2.0.0 — RDTX VisualLab
+## 2.1.0 — VisualLab professional dashboard
 
 ### Added
 
-- Local Flask web dashboard for running real RDTX transfers from a browser.
-- Live Server-Sent Events stream for sender/receiver protocol activity.
-- Selective Repeat window visualization driven by real ACK events.
-- File upload, impairment controls, metrics and experiment history.
-- SQLite-backed experiment persistence.
-- Web integration test that completes a real localhost UDP transfer.
-- Research-gap document positioning the project against ARQ simulators, Wireshark, ns-3 and Mininet.
-- `rdtx-web` launcher with proper `--host`, `--port`, `--help` and `--version`.
+- Scenario presets and labeled experiments.
+- Filterable live protocol timeline.
+- Richer live/final transfer metrics.
+- Visual comparison of recent throughput and retransmissions.
+- Per-run JSON export and reconstructed-file download.
+- CSV export for experiment history.
+- Engine health endpoint and active-run reporting.
+- Configurable ACK corruption and ACK delay in the web UI.
+- Upload-limit error handling and browser security headers.
+- Bounded concurrent experiment execution.
+- Web architecture documentation.
 
-### Preserved
+### Improved
 
-- The original RDTX protocol engine remains the networking core.
-- CLI transfer, benchmarking, Selective Repeat, CRC32, SHA-256, loss/corruption/reordering simulation and tests remain available.
+- Event stream now includes structured sequence/window metadata.
+- Experiment history is easier to inspect and compare.
+- Dashboard is more responsive and presentation-ready.
+- Backend validates non-finite numeric inputs and output download paths.
+
+## 2.0.0 — RDTX VisualLab
+
+- Added Flask dashboard, real UDP experiment orchestration, live SSE events, SQLite history, research-gap documentation, and web integration tests.
 
 ## 1.3.0 — Demonstration and reporting polish
 
-- Added explicit packet reordering, report-ready benchmark output and cleaner CLI behavior.
+- Added explicit packet reordering, report-ready benchmark output, and cleaner CLI behavior.
 
 ## 1.2.0 — Protocol hardening
 
-- Enforced strict Selective Repeat sender-window semantics.
-- Added peer endpoint validation and dedicated sender-window tests.
+- Enforced strict Selective Repeat sender-window semantics and peer validation.
 
-## 1.1.0 — Professional mini-project release
-
-- Added unified CLI, trace mode, statistics, benchmarks, expanded CI and submission documentation.
-
-## 1.0.0 — Initial release
-
-- Reliable UDP transfer with sequence numbers, ACKs, CRC32, retransmission, buffering and SHA-256 verification.
+## 1.0.0 — Initial reliable UDP transfer

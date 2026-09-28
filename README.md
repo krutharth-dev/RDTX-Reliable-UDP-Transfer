@@ -1,27 +1,28 @@
 # RDTX VisualLab — Reliable UDP Transfer & Selective Repeat Analyzer
 
-RDTX VisualLab is a Computer Networks mini-project that combines a **real reliable file-transfer protocol over UDP** with a local web dashboard for live Selective Repeat analysis.
+**RDTX VisualLab** is a local-first Computer Networks experimentation app built around a real reliable file-transfer protocol over UDP.
 
-The networking core is still RDTX: sequence numbers, individual ACKs, a strict sliding window, timeout-based retransmission, CRC32 validation, out-of-order buffering, duplicate handling and SHA-256 end-to-end verification. The VisualLab adds a browser interface that lets you run and observe those mechanisms without replacing them with a JavaScript simulation.
+The networking core implements strict **Selective Repeat ARQ**: sequence numbers, per-packet ACKs, a bounded sender window, timeout-based retransmission, CRC32 validation, out-of-order buffering, duplicate handling, and SHA-256 end-to-end verification. The web application configures and observes those real UDP transfers—it does not replace them with a browser-only simulation.
 
 ## Final project title
 
 **RDTX VisualLab: Web-Based Reliable File Transfer and Selective Repeat Analysis over Unreliable UDP**
 
-## What the web app shows
+## Professional dashboard features
 
-- Upload any file and transfer it through real localhost UDP sockets.
-- Configure sender window size and chunk size.
-- Inject DATA loss and ACK loss.
-- Inject corruption, delay and explicit packet reordering.
-- Watch DATA, ACK, drops, reordering and retransmission events live.
-- Watch the Selective Repeat sender window move as ACKs arrive.
-- See throughput, retransmissions, drops and final integrity.
-- Keep recent experiment history in SQLite for comparison.
-
-## Why this is still a CN project
-
-The browser is only the control/visualization layer. The transfer itself is performed by the existing Python RDTX sender and receiver over UDP. See [docs/RESEARCH_GAP.md](docs/RESEARCH_GAP.md) for the project positioning against ARQ simulators, Wireshark, ns-3 and Mininet.
+- Drag/select a real file and transfer it through localhost UDP sockets.
+- Scenario presets for baseline, lossy link, corruption, and reordering.
+- Configure window size, chunk size, timeout, deterministic seed, DATA/ACK loss, corruption, delay, and reordering.
+- Live Selective Repeat window movement driven by actual ACK events.
+- Filterable protocol timeline for DATA, ACK, retransmission, drop, and reorder events.
+- Live throughput, elapsed time, drop, ACK, and retransmission counters.
+- End-to-end result inspector with duplicate/ACK-drop metrics.
+- Download the reconstructed received file directly from the browser.
+- Export an individual experiment as JSON.
+- Export the complete recent experiment history as CSV.
+- Compare recent runs visually by throughput and retransmissions.
+- SQLite-backed experiment history.
+- Health/concurrency endpoint and upload limits for safer local operation.
 
 ## Run on macOS
 
@@ -39,22 +40,33 @@ Open:
 http://127.0.0.1:5000
 ~~~
 
-The CLI remains available:
+If port 5000 is busy:
 
 ~~~bash
-rdtx --version
-rdtx send demo.txt --loss 0.20 --trace
-rdtx benchmark
+rdtx-web --port 5050
 ~~~
 
-## Suggested HOD demo
+## Recommended evaluation sequence
 
-1. Upload `demo.txt` with no impairment.
-2. Run with 20% DATA loss and 10% ACK loss; point out retransmissions.
-3. Run with 100% reordering; point out reversed DATA events and successful reconstruction.
-4. Change the Selective Repeat window and compare behavior.
-5. Open experiment history and compare retransmissions/throughput.
-6. Explain that the browser observes a real UDP transfer, not a simulated-only ARQ animation.
+1. **Baseline** — zero impairment; demonstrate normal window progression and PASS integrity.
+2. **Lossy link** — 20% DATA loss + 10% ACK loss; demonstrate timeout/retransmission and duplicates.
+3. **Reordering** — 100% adjacent-pair reordering; demonstrate out-of-order buffering.
+4. **Corruption** — show CRC32 rejection followed by retransmission.
+5. **Compare** — label runs and compare throughput/retransmissions in the dashboard.
+6. **Evidence** — download the received file, export the run JSON, and export history CSV.
+
+## API surface
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | Engine/version/concurrency status |
+| `POST /api/runs` | Start a real UDP experiment |
+| `GET /api/runs/<id>` | Run state and results |
+| `GET /api/runs/<id>/events` | Live Server-Sent Events stream |
+| `GET /api/runs/<id>/download` | Download reconstructed file |
+| `GET /api/runs/<id>/export` | Export run JSON |
+| `GET /api/history` | Recent experiment history |
+| `GET /api/history.csv` | Export history CSV |
 
 ## Verification
 
@@ -63,4 +75,11 @@ make test
 make verify
 ~~~
 
-GitHub Actions installs the web dependency, runs the full protocol/CLI/web suite on Python 3.10–3.13, and performs the existing benchmark smoke test.
+CI installs the complete application and runs protocol, CLI, benchmark, and web integration tests on Python 3.10–3.13.
+
+See:
+- [Research gap](docs/RESEARCH_GAP.md)
+- [Mini-project report](docs/MINI_PROJECT_REPORT.md)
+- [Demo guide](docs/DEMO_GUIDE.md)
+- [Viva guide](docs/VIVA_GUIDE.md)
+- [Web architecture](docs/WEB_ARCHITECTURE.md)

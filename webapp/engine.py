@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import sqlite3
 import threading
@@ -19,7 +20,8 @@ from rdtx.sender import RDTXSender
 class EventJournal:
     """Keep live experiment events and support late SSE subscribers."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_events_per_run: int = 5000) -> None:
+        self.max_events_per_run = max_events_per_run
         self._events: dict[str, list[dict[str, Any]]] = {}
         self._done: set[str] = set()
         self._conditions: dict[str, threading.Condition] = {}
@@ -35,7 +37,10 @@ class EventJournal:
         condition = self._conditions[run_id]
         with condition:
             event = {"timestamp": time.time(), **event}
-            self._events[run_id].append(event)
+            events = self._events[run_id]
+            events.append(event)
+            if len(events) > self.max_events_per_run:
+                del events[: len(events) - self.max_events_per_run]
             condition.notify_all()
 
     def finish(self, run_id: str) -> None:
@@ -83,7 +88,7 @@ class ExperimentStore:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path)
+        db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
         return db
 
@@ -178,15 +183,32 @@ def free_udp_port() -> int:
 class RunManager:
     """Run real localhost UDP transfers and expose events/history to the web UI."""
 
-    def __init__(self, data_dir: str | Path) -> None:
+    def __init__(self, data_dir: str | Path, max_active_runs: int = 3) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.store = ExperimentStore(self.data_dir / "visual_lab.sqlite3")
         self.events = EventJournal()
+        self.max_active_runs = max_active_runs
+        self._active: set[str] = set()
+        self._active_lock = threading.Lock()
+
+    @property
+    def active_count(self) -> int:
+        with self._active_lock:
+            return len(self._active)
 
     def start(self, filename: str, payload: bytes, params: dict[str, Any]) -> str:
         run_id = uuid.uuid4().hex[:12]
         safe_name = Path(filename).name or "upload.bin"
+
+        with self._active_lock:
+            if len(self._active) >= self.max_active_runs:
+                raise RuntimeError(
+                    f"VisualLab is already running {self.max_active_runs} experiments. "
+                    "Wait for one to finish."
+                )
+            self._active.add(run_id)
+
         run_dir = self.data_dir / "runs" / run_id
         input_dir = run_dir / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -199,27 +221,63 @@ class RunManager:
             target=self._run,
             args=(run_id, source, run_dir, params),
             daemon=True,
+            name=f"rdtx-run-{run_id}",
         )
         thread.start()
         return run_id
 
+    def output_path(self, run_id: str) -> Path | None:
+        run = self.store.get(run_id)
+        if not run or run["status"] != "completed" or not run["result"]:
+            return None
+        raw_path = run["result"].get("output_file")
+        if not raw_path:
+            return None
+        candidate = Path(raw_path).resolve()
+        allowed = (self.data_dir / "runs" / run_id).resolve()
+        if candidate != allowed and allowed not in candidate.parents:
+            return None
+        return candidate if candidate.is_file() else None
+
     def _emit(self, run_id: str, side: str, message: str) -> None:
-        if "DROP" in message:
+        upper = message.upper()
+        if "RETRANSMISSION" in upper:
+            kind = "retransmission"
+        elif "DROP" in upper:
             kind = "drop"
-        elif "ACK" in message:
-            kind = "ack"
-        elif "REORDER" in message:
+        elif "REORDER" in upper:
             kind = "reorder"
-        elif "DATA" in message:
+        elif "ACK" in upper:
+            kind = "ack"
+        elif "DATA" in upper:
             kind = "data"
-        elif "COMPLETE" in message:
+        elif "COMPLETE" in upper:
             kind = "complete"
         else:
             kind = "info"
-        self.events.publish(
-            run_id,
-            {"kind": kind, "side": side, "message": message},
+
+        event: dict[str, Any] = {
+            "kind": kind,
+            "side": side,
+            "message": message,
+        }
+        seq = re.search(r"seq=(\d+)", message)
+        if seq:
+            event["seq"] = int(seq.group(1))
+
+        window = re.search(
+            r"window base (\d+)->(\d+) range=\[(\d+),(\d+)\)",
+            message,
         )
+        if window:
+            event["window"] = {
+                "old_base": int(window.group(1)),
+                "base": int(window.group(2)),
+                "start": int(window.group(3)),
+                "end": int(window.group(4)),
+            }
+
+        self.events.publish(run_id, event)
 
     def _run(
         self,
@@ -267,7 +325,9 @@ class RunManager:
                 except BaseException as exc:
                     receiver_state["error"] = exc
 
-            receiver_thread = threading.Thread(target=receive, daemon=True)
+            receiver_thread = threading.Thread(
+                target=receive, daemon=True, name=f"rdtx-receiver-{run_id}"
+            )
             receiver_thread.start()
             time.sleep(0.05)
 
@@ -340,4 +400,6 @@ class RunManager:
                 },
             )
         finally:
+            with self._active_lock:
+                self._active.discard(run_id)
             self.events.finish(run_id)
