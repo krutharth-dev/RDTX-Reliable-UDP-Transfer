@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
+from rdtx import __version__
 from .engine import RunManager
 
 
@@ -122,10 +124,24 @@ def create_app(config: dict[str, Any] | None = None) -> Flask:
     return app
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="rdtx-web",
+        description="Start the local RDTX VisualLab web dashboard.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="web server bind host")
+    parser.add_argument("--port", type=int, default=5000, help="web server port")
+    parser.add_argument("--version", action="version", version=f"RDTX VisualLab {__version__}")
+    return parser
+
+
 def main() -> None:
+    args = build_parser().parse_args()
+    if not 1 <= args.port <= 65_535:
+        raise SystemExit("--port must be between 1 and 65535")
     app = create_app()
-    print("RDTX VisualLab: http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, threaded=True, debug=False)
+    print(f"RDTX VisualLab: http://{args.host}:{args.port}")
+    app.run(host=args.host, port=args.port, threaded=True, debug=False)
 
 
 if __name__ == "__main__":
