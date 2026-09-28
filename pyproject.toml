@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rdtx-reliable-udp-transfer"
+version = "1.0.0"
+description = "Reliable file transfer over unreliable UDP for computer networks learning and demonstration."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = []
+
+[project.scripts]
+rdtx-send = "rdtx.sender:main"
+rdtx-receive = "rdtx.receiver:main"
+
+[tool.setuptools]
+packages = ["rdtx"]
