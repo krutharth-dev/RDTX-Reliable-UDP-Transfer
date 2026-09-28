@@ -7,5 +7,6 @@ venv/
 .DS_Store
 .pytest_cache/
 received/
+results/
 dist/
 build/
