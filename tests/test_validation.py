@@ -49,6 +49,7 @@ class ValidationTests(unittest.TestCase):
             self.assertEqual(payload["role"], "sender")
             self.assertEqual(payload["context"]["scenario"], "unit-test")
             self.assertEqual(payload["stats"]["file_bytes"], 100)
+            self.assertEqual(payload["derived_metrics"]["throughput_kib_s"], 0.1953125)
 
 
 if __name__ == "__main__":
