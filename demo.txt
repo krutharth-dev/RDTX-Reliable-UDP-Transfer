@@ -1,0 +1,3 @@
+RDTX demo file
+===============
+If this text arrives intact while simulated UDP packet loss is enabled, the reliability layer is doing its job.
