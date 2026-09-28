@@ -23,9 +23,9 @@ The project exposes the networking concepts directly instead of hiding them behi
 
 | Area | Implementation |
 |---|---|
-| Reliability | Selective Repeat-style per-packet ACK and retransmission |
+| Reliability | Textbook Selective Repeat sender window with per-packet ACK/retransmission |
 | Integrity | CRC32 per datagram + SHA-256 for the completed file |
-| Windowing | Configurable number of outstanding DATA packets |
+| Windowing | Configurable sender window bounded by `base + window_size` |
 | Failure simulation | DATA/ACK loss, corruption and delay |
 | Observability | Live packet trace mode and transfer summaries |
 | Experiments | JSON statistics export + automated CSV benchmark |
@@ -241,7 +241,7 @@ rdtx --help
 
 ## Documentation for submission
 
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Algorithms:** [docs/ALGORITHMS.md](docs/ALGORITHMS.md)\n- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Demo/evaluation guide:** [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md)
 - **Protocol specification:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
 - **Experiment methodology:** [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)
@@ -250,7 +250,7 @@ rdtx --help
 
 ## Testing
 
-The automated suite covers packet serialization, CRC corruption detection, malformed datagrams, metadata validation, filename sanitization, CLI behavior, statistics export, ordinary localhost transfer, and deterministic lossy transfer.
+The automated suite covers packet serialization, CRC corruption detection, malformed datagrams, metadata validation, filename sanitization, CLI behavior, statistics export, strict Selective Repeat window movement, peer-endpoint filtering, empty-file transfer, ordinary localhost transfer, and deterministic lossy/corruption recovery.
 
 GitHub Actions executes compile checks, tests and package installation on Python 3.10, 3.11, 3.12 and 3.13.
 

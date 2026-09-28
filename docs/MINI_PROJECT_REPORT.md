@@ -36,7 +36,7 @@ Two separate machines may be used over a LAN, but one laptop with two terminal w
 
 ## 4. Methodology
 
-The input file is divided into fixed-size chunks. Each chunk is placed in a DATA packet with a sequence number and CRC32. The sender maintains a configurable window of unacknowledged packets. The receiver independently acknowledges valid sequence numbers and buffers packets that arrive out of order. A timer is associated with each outstanding packet; expiration causes only that packet to be retransmitted.
+The input file is divided into fixed-size chunks. Each chunk is placed in a DATA packet with a sequence number and CRC32. The sender maintains a Selective Repeat base and permits new sequence numbers only inside `[base, base + window_size)`. The receiver independently acknowledges valid sequence numbers and buffers packets that arrive out of order. A timer is associated with each outstanding packet; expiration causes only that packet to be retransmitted.
 
 Before data transfer, HELLO/HELLO_ACK establishes transfer metadata. After all DATA packets have been acknowledged, FIN/FIN_ACK completes the session. The receiver then validates the reconstructed file against the advertised byte count and SHA-256 digest.
 
@@ -70,7 +70,7 @@ The fixed RDTX header contains magic bytes, protocol version, packet type, flags
 
 ## 7. Testing
 
-The repository includes automated tests for packet serialization, corruption detection, malformed packets, metadata consistency, CLI behavior, statistics export, ordinary end-to-end transfer and transfer with deterministic packet/ACK loss. GitHub Actions runs the suite on Python 3.10–3.13.
+The repository includes automated tests for packet serialization, corruption detection, malformed packets, metadata consistency, CLI behavior, statistics export, strict Selective Repeat window movement, peer validation, empty-file transfer, ordinary end-to-end transfer, and deterministic packet/ACK loss. GitHub Actions runs the suite on Python 3.10–3.13.
 
 ## 8. Experimental Evaluation
 

@@ -28,6 +28,7 @@ from .config import (
 from .protocol import ChecksumError, MAX_PAYLOAD, Packet, PacketType, ProtocolError, json_payload
 from .reporting import save_stats
 from .simulator import LossSimulator
+from .window import SelectiveRepeatWindow
 
 
 @dataclass(slots=True)
@@ -40,6 +41,7 @@ class SenderStats:
     retransmissions: int = 0
     ack_packets: int = 0
     checksum_errors: int = 0
+    foreign_datagrams_ignored: int = 0
     elapsed: float = 0.0
 
     @property
@@ -84,7 +86,13 @@ class RDTXSender:
         if max_retries < 1:
             raise ValueError("max_retries must be >= 1")
 
-        self.destination = (host, port)
+        try:
+            resolved_host = socket.gethostbyname(host)
+        except socket.gaierror as exc:
+            raise ValueError(f"unable to resolve receiver host: {host}") from exc
+
+        self.destination = (resolved_host, port)
+        self.destination_name = host
         self.chunk_size = chunk_size
         self.window_size = window_size
         self.timeout = timeout
@@ -132,6 +140,17 @@ class RDTXSender:
             suffix = f" ({', '.join(details)})" if details else ""
             self._trace(f"{state} {label}{suffix}")
 
+    def _receive_from_peer(self, sock: socket.socket) -> bytes:
+        """Receive one datagram and reject packets from unexpected UDP peers."""
+        incoming, source = sock.recvfrom(MAX_UDP_DATAGRAM)
+        if source != self.destination:
+            self.stats.foreign_datagrams_ignored += 1
+            self._trace(
+                f"RX datagram from unexpected peer {source[0]}:{source[1]} -> ignored"
+            )
+            raise ProtocolError("unexpected UDP peer")
+        return incoming
+
     def _exchange_control(
         self,
         sock: socket.socket,
@@ -154,7 +173,7 @@ class RDTXSender:
                     break
                 sock.settimeout(remaining)
                 try:
-                    incoming, _ = sock.recvfrom(MAX_UDP_DATAGRAM)
+                    incoming = self._receive_from_peer(sock)
                     decoded = Packet.decode(incoming)
                 except socket.timeout:
                     break
@@ -163,10 +182,13 @@ class RDTXSender:
                     self._trace("RX corrupted control/ACK datagram -> ignored")
                     continue
                 except ProtocolError:
-                    self._trace("RX invalid datagram -> ignored")
+                    self._trace("RX invalid/unexpected datagram -> ignored")
                     continue
 
                 if decoded.session_id != session_id:
+                    self._trace(
+                        f"RX session={decoded.session_id} while expecting {session_id} -> ignored"
+                    )
                     continue
                 self._trace(f"RX {decoded.packet_type.name}")
                 if decoded.packet_type == PacketType.ERROR:
@@ -208,7 +230,8 @@ class RDTXSender:
             self._log("RDTX SENDER")
             self._log("=" * 60)
             self._log(
-                f"Destination : {self.destination[0]}:{self.destination[1]}\n"
+                f"Destination : {self.destination_name} "
+                f"({self.destination[0]}):{self.destination[1]}\n"
                 f"File        : {path.name}\n"
                 f"Size        : {len(data)} bytes\n"
                 f"Chunks      : {len(chunks)}\n"
@@ -225,38 +248,54 @@ class RDTXSender:
             self._log("[RDTX] Handshake complete. Starting data transfer.")
 
             inflight: dict[int, InFlight] = {}
-            acked: set[int] = set()
-            next_seq = 0
+            window = SelectiveRepeatWindow(
+                total_packets=len(chunks),
+                window_size=self.window_size,
+            )
             sock.settimeout(min(0.05, self.timeout))
 
-            while len(acked) < len(chunks):
-                while next_seq < len(chunks) and len(inflight) < self.window_size:
+            while not window.complete:
+                while window.can_send:
+                    seq = window.take_next()
                     raw = Packet(
                         PacketType.DATA,
                         session_id,
-                        seq=next_seq,
-                        payload=chunks[next_seq],
+                        seq=seq,
+                        payload=chunks[seq],
                     ).encode()
-                    self._send(sock, raw, label=f"DATA seq={next_seq}")
-                    inflight[next_seq] = InFlight(raw=raw, sent_at=time.monotonic())
-                    next_seq += 1
+                    self._send(sock, raw, label=f"DATA seq={seq}")
+                    inflight[seq] = InFlight(raw=raw, sent_at=time.monotonic())
 
                 try:
-                    incoming, _ = sock.recvfrom(MAX_UDP_DATAGRAM)
+                    incoming = self._receive_from_peer(sock)
                     packet = Packet.decode(incoming)
-                    if packet.session_id == session_id and packet.packet_type == PacketType.ACK:
+                    if packet.session_id != session_id:
+                        self._trace(
+                            f"RX session={packet.session_id} while expecting {session_id} -> ignored"
+                        )
+                        continue
+                    if packet.packet_type == PacketType.ERROR:
+                        message = packet.payload.decode("utf-8", errors="replace")
+                        raise RuntimeError(f"receiver error: {message}")
+                    if packet.packet_type == PacketType.ACK:
                         self.stats.ack_packets += 1
-                        self._trace(f"RX ACK seq={packet.ack}")
-                        if packet.ack in inflight:
+                        old_base = window.base
+                        if packet.ack in inflight and window.acknowledge(packet.ack):
                             inflight.pop(packet.ack, None)
-                            acked.add(packet.ack)
+                            self._trace(
+                                f"RX ACK seq={packet.ack} | "
+                                f"window base {old_base}->{window.base} "
+                                f"range=[{window.base},{window.upper_bound})"
+                            )
+                        else:
+                            self._trace(f"RX duplicate/out-of-window ACK seq={packet.ack} -> ignored")
                 except socket.timeout:
                     pass
                 except ChecksumError:
                     self.stats.checksum_errors += 1
                     self._trace("RX corrupted ACK -> ignored")
                 except ProtocolError:
-                    self._trace("RX invalid datagram -> ignored")
+                    self._trace("RX invalid/unexpected datagram -> ignored")
 
                 now = time.monotonic()
                 for seq, state in list(inflight.items()):
@@ -290,6 +329,7 @@ class RDTXSender:
             f"Retransmissions : {self.stats.retransmissions}\n"
             f"Simulated drops : {self.stats.simulated_drops}\n"
             f"Corruptions     : {self.stats.simulated_corruptions}\n"
+            f"Foreign ignored : {self.stats.foreign_datagrams_ignored}\n"
             f"Throughput      : {self.stats.throughput_kib_s:.1f} KiB/s\n"
             f"SHA-256         : {digest}"
         )

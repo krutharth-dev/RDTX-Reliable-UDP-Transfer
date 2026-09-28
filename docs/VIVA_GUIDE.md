@@ -10,7 +10,11 @@ Using TCP would hide the main learning objective because TCP already performs se
 
 ## Which ARQ technique is used?
 
-RDTX uses Selective Repeat behavior. Multiple packets may be outstanding, the receiver ACKs individual sequence numbers, and the sender retransmits only packets whose ACKs are missing after timeout.
+RDTX uses Selective Repeat ARQ. Multiple packets may be outstanding, the receiver ACKs individual sequence numbers, and the sender retransmits only packets whose ACKs are missing after timeout. The sender window is strictly bounded by `[base, base + window_size)`.
+
+## What makes the implementation Selective Repeat rather than only "multiple packets in flight"?
+
+The sender keeps a base sequence number. New packets can enter only while their sequence number is below `base + window_size`. ACKs may arrive out of order, but the base cannot advance past a missing lower sequence number. Retransmission is per packet rather than retransmitting the entire later range.
 
 ## Why is a sliding window required?
 
