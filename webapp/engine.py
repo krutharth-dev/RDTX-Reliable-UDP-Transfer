@@ -1,14 +1,7 @@
-"""Experiment orchestration for the RDTX VisualLab web application."""
+"""Experiment orchestration for RDTX VisualLab."""
 
 from __future__ import annotations
-
-import json
-import re
-import socket
-import sqlite3
-import threading
-import time
-import uuid
+import json, re, socket, sqlite3, threading, time, uuid
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterator
@@ -18,8 +11,6 @@ from rdtx.sender import RDTXSender
 
 
 class EventJournal:
-    """Keep live experiment events and support late SSE subscribers."""
-
     def __init__(self, max_events_per_run: int = 5000) -> None:
         self.max_events_per_run = max_events_per_run
         self._events: dict[str, list[dict[str, Any]]] = {}
@@ -36,9 +27,8 @@ class EventJournal:
     def publish(self, run_id: str, event: dict[str, Any]) -> None:
         condition = self._conditions[run_id]
         with condition:
-            event = {"timestamp": time.time(), **event}
             events = self._events[run_id]
-            events.append(event)
+            events.append({"timestamp": time.time(), **event})
             if len(events) > self.max_events_per_run:
                 del events[: len(events) - self.max_events_per_run]
             condition.notify_all()
@@ -56,36 +46,22 @@ class EventJournal:
             with condition:
                 while index >= len(self._events[run_id]) and run_id not in self._done:
                     condition.wait(timeout=1.0)
-
                 pending = self._events[run_id][index:]
                 index = len(self._events[run_id])
                 done = run_id in self._done
-
             yield from pending
             if done and index >= len(self._events[run_id]):
                 return
 
 
 class ExperimentStore:
-    """SQLite-backed experiment history."""
-
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
-            db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS experiments (
-                    id TEXT PRIMARY KEY,
-                    filename TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    params_json TEXT NOT NULL,
-                    result_json TEXT,
-                    error TEXT
-                )
-                """
-            )
+            db.execute("""CREATE TABLE IF NOT EXISTS experiments (
+                id TEXT PRIMARY KEY, filename TEXT NOT NULL, status TEXT NOT NULL,
+                created_at REAL NOT NULL, params_json TEXT NOT NULL, result_json TEXT, error TEXT)""")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
@@ -94,84 +70,46 @@ class ExperimentStore:
 
     def create(self, run_id: str, filename: str, params: dict[str, Any]) -> None:
         with self._connect() as db:
-            db.execute(
-                "INSERT INTO experiments VALUES (?, ?, ?, ?, ?, NULL, NULL)",
-                (run_id, filename, "queued", time.time(), json.dumps(params)),
-            )
+            db.execute("INSERT INTO experiments VALUES (?, ?, ?, ?, ?, NULL, NULL)",
+                       (run_id, filename, "queued", time.time(), json.dumps(params)))
 
-    def update(
-        self,
-        run_id: str,
-        *,
-        status: str,
-        result: dict[str, Any] | None = None,
-        error: str | None = None,
-    ) -> None:
+    def update(self, run_id: str, *, status: str, result=None, error=None) -> None:
         with self._connect() as db:
-            db.execute(
-                """
-                UPDATE experiments
-                SET status = ?, result_json = ?, error = ?
-                WHERE id = ?
-                """,
-                (
-                    status,
-                    json.dumps(result) if result is not None else None,
-                    error,
-                    run_id,
-                ),
-            )
+            db.execute("UPDATE experiments SET status=?, result_json=?, error=? WHERE id=?",
+                       (status, json.dumps(result) if result is not None else None, error, run_id))
 
     @staticmethod
     def _row(row: sqlite3.Row) -> dict[str, Any]:
-        return {
-            "id": row["id"],
-            "filename": row["filename"],
-            "status": row["status"],
-            "created_at": row["created_at"],
-            "params": json.loads(row["params_json"]),
-            "result": json.loads(row["result_json"]) if row["result_json"] else None,
-            "error": row["error"],
-        }
+        return {"id": row["id"], "filename": row["filename"], "status": row["status"],
+                "created_at": row["created_at"], "params": json.loads(row["params_json"]),
+                "result": json.loads(row["result_json"]) if row["result_json"] else None,
+                "error": row["error"]}
 
-    def get(self, run_id: str) -> dict[str, Any] | None:
+    def get(self, run_id: str):
         with self._connect() as db:
-            row = db.execute(
-                "SELECT * FROM experiments WHERE id = ?", (run_id,)
-            ).fetchone()
+            row = db.execute("SELECT * FROM experiments WHERE id=?", (run_id,)).fetchone()
         return self._row(row) if row else None
 
-    def history(self, limit: int = 20) -> list[dict[str, Any]]:
+    def history(self, limit: int = 20):
         with self._connect() as db:
-            rows = db.execute(
-                "SELECT * FROM experiments ORDER BY created_at DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = db.execute("SELECT * FROM experiments ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
         return [self._row(row) for row in rows]
 
 
 class VisualSender(RDTXSender):
-    def __init__(self, *args: Any, emit, **kwargs: Any) -> None:
+    def __init__(self, *args, emit, **kwargs):
         self._emit_web = emit
         super().__init__(*args, **kwargs)
-
-    def _trace(self, message: str) -> None:
-        self._emit_web("sender", message)
-
-    def _log(self, message: str) -> None:
-        self._emit_web("sender-log", message)
+    def _trace(self, message): self._emit_web("sender", message)
+    def _log(self, message): self._emit_web("sender-log", message)
 
 
 class VisualReceiver(RDTXReceiver):
-    def __init__(self, *args: Any, emit, **kwargs: Any) -> None:
+    def __init__(self, *args, emit, **kwargs):
         self._emit_web = emit
         super().__init__(*args, **kwargs)
-
-    def _trace(self, message: str) -> None:
-        self._emit_web("receiver", message)
-
-    def _log(self, message: str) -> None:
-        self._emit_web("receiver-log", message)
+    def _trace(self, message): self._emit_web("receiver", message)
+    def _log(self, message): self._emit_web("receiver-log", message)
 
 
 def free_udp_port() -> int:
@@ -181,8 +119,6 @@ def free_udp_port() -> int:
 
 
 class RunManager:
-    """Run real localhost UDP transfers and expose events/history to the web UI."""
-
     def __init__(self, data_dir: str | Path, max_active_runs: int = 3) -> None:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -199,207 +135,157 @@ class RunManager:
 
     def start(self, filename: str, payload: bytes, params: dict[str, Any]) -> str:
         run_id = uuid.uuid4().hex[:12]
-        safe_name = Path(filename).name or "upload.bin"
-
         with self._active_lock:
             if len(self._active) >= self.max_active_runs:
-                raise RuntimeError(
-                    f"VisualLab is already running {self.max_active_runs} experiments. "
-                    "Wait for one to finish."
-                )
+                raise RuntimeError(f"VisualLab is already running {self.max_active_runs} experiments.")
             self._active.add(run_id)
-
+        safe_name = Path(filename).name or "upload.bin"
         run_dir = self.data_dir / "runs" / run_id
-        input_dir = run_dir / "input"
-        input_dir.mkdir(parents=True, exist_ok=True)
-        source = input_dir / safe_name
+        source = run_dir / "input" / safe_name
+        source.parent.mkdir(parents=True, exist_ok=True)
         source.write_bytes(payload)
-
         self.events.create(run_id)
         self.store.create(run_id, safe_name, params)
-        thread = threading.Thread(
-            target=self._run,
-            args=(run_id, source, run_dir, params),
-            daemon=True,
-            name=f"rdtx-run-{run_id}",
-        )
-        thread.start()
+        threading.Thread(target=self._run, args=(run_id, source, run_dir, params),
+                         daemon=True, name=f"rdtx-run-{run_id}").start()
         return run_id
 
-    def output_path(self, run_id: str) -> Path | None:
+    def output_path(self, run_id: str):
         run = self.store.get(run_id)
         if not run or run["status"] != "completed" or not run["result"]:
             return None
-        raw_path = run["result"].get("output_file")
-        if not raw_path:
+        raw = run["result"].get("output_file")
+        if not raw:
             return None
-        candidate = Path(raw_path).resolve()
+        candidate = Path(raw).resolve()
         allowed = (self.data_dir / "runs" / run_id).resolve()
-        if candidate != allowed and allowed not in candidate.parents:
-            return None
-        return candidate if candidate.is_file() else None
+        return candidate if allowed in candidate.parents and candidate.is_file() else None
 
     def _emit(self, run_id: str, side: str, message: str) -> None:
         upper = message.upper()
-        if "RETRANSMISSION" in upper:
-            kind = "retransmission"
-        elif "DROP" in upper:
-            kind = "drop"
-        elif "REORDER" in upper:
-            kind = "reorder"
-        elif "ACK" in upper:
-            kind = "ack"
-        elif "DATA" in upper:
-            kind = "data"
-        elif "COMPLETE" in upper:
-            kind = "complete"
-        else:
-            kind = "info"
-
-        event: dict[str, Any] = {
-            "kind": kind,
-            "side": side,
-            "message": message,
-        }
+        kind = ("retransmission" if "RETRANSMISSION" in upper else
+                "drop" if "DROP" in upper else "reorder" if "REORDER" in upper else
+                "ack" if "ACK" in upper else "data" if "DATA" in upper else
+                "complete" if "COMPLETE" in upper else "info")
+        event: dict[str, Any] = {"kind": kind, "side": side, "message": message}
         seq = re.search(r"seq=(\d+)", message)
-        if seq:
-            event["seq"] = int(seq.group(1))
-
-        window = re.search(
-            r"window base (\d+)->(\d+) range=\[(\d+),(\d+)\)",
-            message,
-        )
+        if seq: event["seq"] = int(seq.group(1))
+        window = re.search(r"window base (\d+)->(\d+) range=\[(\d+),(\d+)\)", message)
         if window:
-            event["window"] = {
-                "old_base": int(window.group(1)),
-                "base": int(window.group(2)),
-                "start": int(window.group(3)),
-                "end": int(window.group(4)),
-            }
-
+            event["window"] = {"old_base": int(window.group(1)), "base": int(window.group(2)),
+                               "start": int(window.group(3)), "end": int(window.group(4))}
         self.events.publish(run_id, event)
 
-    def _run(
-        self,
-        run_id: str,
-        source: Path,
-        run_dir: Path,
-        params: dict[str, Any],
-    ) -> None:
+    def _sender(self, run_id, params, host, port):
         emit = lambda side, message: self._emit(run_id, side, message)
+        return VisualSender(host, port, chunk_size=int(params["chunk_size"]),
+            window_size=int(params["window_size"]), timeout=float(params["timeout"]),
+            max_retries=80, loss=float(params["loss"]), corruption=float(params["corruption"]),
+            delay_ms=float(params["delay_ms"]), reorder_rate=float(params["reorder"]),
+            seed=int(params["seed"]), verbose=False, trace=True, emit=emit)
+
+    def _run(self, run_id, source, run_dir, params):
+        mode = params.get("mode", "local")
         self.store.update(run_id, status="running")
-        self.events.publish(
-            run_id,
-            {
-                "kind": "status",
-                "side": "system",
-                "message": "Experiment started",
-                "status": "running",
-            },
-        )
-
-        port = free_udp_port()
-        output_dir = run_dir / "received"
-        receiver_state: dict[str, Any] = {}
-
+        self.events.publish(run_id, {"kind":"status","side":"system",
+            "message":f"Experiment started in {mode.upper()} mode","status":"running"})
         try:
-            receiver = VisualReceiver(
-                "127.0.0.1",
-                port,
-                output_dir=output_dir,
-                ack_loss=float(params["ack_loss"]),
-                ack_corruption=float(params["ack_corruption"]),
-                ack_delay_ms=float(params["ack_delay_ms"]),
-                seed=int(params["seed"]),
-                linger=0.15,
-                verbose=False,
-                trace=True,
-                emit=emit,
-            )
-
-            def receive() -> None:
-                try:
-                    path, stats = receiver.receive_one()
-                    receiver_state["path"] = path
-                    receiver_state["stats"] = stats
-                except BaseException as exc:
-                    receiver_state["error"] = exc
-
-            receiver_thread = threading.Thread(
-                target=receive, daemon=True, name=f"rdtx-receiver-{run_id}"
-            )
-            receiver_thread.start()
-            time.sleep(0.05)
-
-            sender = VisualSender(
-                "127.0.0.1",
-                port,
-                chunk_size=int(params["chunk_size"]),
-                window_size=int(params["window_size"]),
-                timeout=float(params["timeout"]),
-                max_retries=80,
-                loss=float(params["loss"]),
-                corruption=float(params["corruption"]),
-                delay_ms=float(params["delay_ms"]),
-                reorder_rate=float(params["reorder"]),
-                seed=int(params["seed"]),
-                verbose=False,
-                trace=True,
-                emit=emit,
-            )
-            sender_stats = sender.send_file(source)
-
-            receiver_thread.join(timeout=3)
-            if receiver_thread.is_alive():
-                raise RuntimeError("receiver did not finish after sender completion")
-            if "error" in receiver_state:
-                raise RuntimeError(f"receiver failed: {receiver_state['error']}")
-
-            received_path = receiver_state["path"]
-            receiver_stats = receiver_state["stats"]
-            integrity = (
-                isinstance(received_path, Path)
-                and received_path.read_bytes() == source.read_bytes()
-            )
-            if not integrity:
-                raise RuntimeError("byte-for-byte integrity verification failed")
-
-            result = {
-                "integrity": "PASS",
-                "output_file": str(received_path),
-                "sender": {
-                    **asdict(sender_stats),
-                    "throughput_kib_s": sender_stats.throughput_kib_s,
-                },
-                "receiver": {
-                    **asdict(receiver_stats),
-                    "throughput_kib_s": receiver_stats.throughput_kib_s,
-                },
-            }
-            self.store.update(run_id, status="completed", result=result)
-            self.events.publish(
-                run_id,
-                {
-                    "kind": "status",
-                    "side": "system",
-                    "message": "Transfer completed with byte-for-byte integrity",
-                    "status": "completed",
-                    "result": result,
-                },
-            )
+            if mode == "lan": self._run_lan(run_id, source, params)
+            else: self._run_local(run_id, source, run_dir, params)
         except BaseException as exc:
-            message = str(exc)
-            self.store.update(run_id, status="failed", error=message)
-            self.events.publish(
-                run_id,
-                {
-                    "kind": "status",
-                    "side": "system",
-                    "message": message,
-                    "status": "failed",
-                },
-            )
+            self.store.update(run_id, status="failed", error=str(exc))
+            self.events.publish(run_id, {"kind":"status","side":"system","message":str(exc),"status":"failed"})
         finally:
-            with self._active_lock:
-                self._active.discard(run_id)
+            with self._active_lock: self._active.discard(run_id)
             self.events.finish(run_id)
+
+    def _run_local(self, run_id, source, run_dir, params):
+        emit = lambda side, message: self._emit(run_id, side, message)
+        port = free_udp_port()
+        state = {}
+        receiver = VisualReceiver("127.0.0.1", port, output_dir=run_dir/"received",
+            ack_loss=float(params["ack_loss"]), ack_corruption=float(params["ack_corruption"]),
+            ack_delay_ms=float(params["ack_delay_ms"]), seed=int(params["seed"]), linger=0.15,
+            verbose=False, trace=True, emit=emit)
+        def receive():
+            try: state["path"], state["stats"] = receiver.receive_one()
+            except BaseException as exc: state["error"] = exc
+        thread = threading.Thread(target=receive, daemon=True)
+        thread.start(); time.sleep(0.05)
+        sender_stats = self._sender(run_id, params, "127.0.0.1", port).send_file(source)
+        thread.join(timeout=3)
+        if thread.is_alive(): raise RuntimeError("receiver did not finish")
+        if "error" in state: raise RuntimeError(f"receiver failed: {state['error']}")
+        path, receiver_stats = state["path"], state["stats"]
+        if path.read_bytes() != source.read_bytes(): raise RuntimeError("byte-for-byte integrity failed")
+        result = {"mode":"local","integrity":"PASS","verification":"byte-for-byte + receiver SHA-256",
+            "output_file":str(path),
+            "sender":{**asdict(sender_stats),"throughput_kib_s":sender_stats.throughput_kib_s},
+            "receiver":{**asdict(receiver_stats),"throughput_kib_s":receiver_stats.throughput_kib_s}}
+        self._complete(run_id, result, "Local transfer completed with byte-for-byte integrity")
+
+    def _run_lan(self, run_id, source, params):
+        host, port = str(params["target_host"]), int(params["target_port"])
+        self.events.publish(run_id, {"kind":"info","side":"system","message":f"Sending to remote receiver {host}:{port}"})
+        sender_stats = self._sender(run_id, params, host, port).send_file(source)
+        result = {"mode":"lan","integrity":"PASS",
+            "verification":"remote FIN_ACK after receiver size + SHA-256 verification",
+            "output_file":None,"remote_host":host,"remote_port":port,
+            "sender":{**asdict(sender_stats),"throughput_kib_s":sender_stats.throughput_kib_s},
+            "receiver":{}}
+        self._complete(run_id, result, "LAN transfer completed; remote receiver returned verified FIN_ACK")
+
+    def _complete(self, run_id, result, message):
+        self.store.update(run_id, status="completed", result=result)
+        self.events.publish(run_id, {"kind":"status","side":"system","message":message,
+                                    "status":"completed","result":result})
+
+
+class MatrixManager:
+    DIMENSIONS = {"window_size", "loss", "corruption", "reorder"}
+    def __init__(self, run_manager: RunManager) -> None:
+        self.run_manager = run_manager
+        self._jobs: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
+
+    def start(self, filename, payload, base_params, dimension, values):
+        if dimension not in self.DIMENSIONS: raise ValueError("unsupported matrix dimension")
+        if not 2 <= len(values) <= 8: raise ValueError("matrix requires between 2 and 8 values")
+        job_id = uuid.uuid4().hex[:10]
+        job = {"id":job_id,"filename":Path(filename).name or "matrix.bin","status":"queued",
+               "dimension":dimension,"values":values,"rows":[],"created_at":time.time()}
+        with self._lock: self._jobs[job_id] = job
+        threading.Thread(target=self._run,args=(job_id,filename,payload,base_params,dimension,values),
+                         daemon=True).start()
+        return job_id
+
+    def get(self, job_id):
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return json.loads(json.dumps(job)) if job else None
+
+    def _run(self, job_id, filename, payload, base, dimension, values):
+        with self._lock: self._jobs[job_id]["status"] = "running"
+        for i, raw in enumerate(values):
+            params = dict(base); params["mode"]="local"; params["label"]=f"matrix {dimension}={raw:g}"
+            if dimension == "window_size":
+                params[dimension]=int(raw); display=str(int(raw))
+            else:
+                params[dimension]=float(raw)/100.0; display=f"{raw:g}%"
+            row={"value":raw,"display_value":display,"status":"running","run_id":None}
+            with self._lock: self._jobs[job_id]["rows"].append(row)
+            try:
+                run_id=self.run_manager.start(filename,payload,params); row["run_id"]=run_id
+                deadline=time.time()+30
+                while time.time()<deadline:
+                    run=self.run_manager.store.get(run_id)
+                    if run and run["status"] in {"completed","failed"}:
+                        row.update({"status":run["status"],"result":run["result"],"error":run["error"]}); break
+                    time.sleep(0.05)
+                else: row.update({"status":"failed","error":"matrix row timed out"})
+            except BaseException as exc:
+                row.update({"status":"failed","error":str(exc)})
+            with self._lock: self._jobs[job_id]["rows"][i]=dict(row)
+        with self._lock:
+            rows=self._jobs[job_id]["rows"]
+            self._jobs[job_id]["status"]="completed" if all(r["status"]=="completed" for r in rows) else "completed_with_errors"
