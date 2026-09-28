@@ -165,7 +165,7 @@ python3 -m rdtx receive --ack-loss 0.15 --ack-corrupt 0.03 --ack-delay-ms 50 --s
 Generate a repeatable benchmark:
 
 ~~~bash
-python3 experiments/benchmark.py
+python3 -m experiments.benchmark
 ~~~
 
 or:
