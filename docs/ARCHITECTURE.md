@@ -39,7 +39,7 @@ The system has four logical layers:
 | Module | Responsibility |
 |---|---|
 | rdtx/protocol.py | Defines packet types, binary header, encoding/decoding and CRC32 validation |
-| rdtx/sender.py | Splits files, maintains the Selective Repeat window, tracks ACKs and retransmits timed-out packets |
+| rdtx/sender.py | Splits files, drives the Selective Repeat transfer, validates the receiver endpoint and retransmits timed-out packets |\n| rdtx/window.py | Enforces the sender window boundary and advances the base only across contiguous ACKed sequence numbers |
 | rdtx/receiver.py | Validates metadata and chunks, buffers out-of-order data, handles duplicates and reconstructs the file |
 | rdtx/simulator.py | Injects controlled packet loss, corruption and delay |
 | rdtx/reporting.py | Exports experiment statistics as JSON |
@@ -54,9 +54,9 @@ The sender transmits a HELLO packet containing filename, file size, chunk size, 
 
 ### Phase B — Reliable data transfer
 
-The sender may keep up to W DATA packets outstanding. Every DATA packet has an independent sequence number. The receiver accepts valid packets even when they arrive out of order and immediately ACKs the corresponding sequence number.
+The sender maintains a base sequence number and may emit a new DATA packet only when its sequence number is inside the current range `[base, base + W)`. Every DATA packet has an independent sequence number. The receiver accepts valid packets even when they arrive out of order and immediately ACKs the corresponding sequence number.
 
-If the sender does not receive an ACK before the per-packet timer expires, only that unacknowledged packet is retransmitted. This is the defining behavior of Selective Repeat.
+Out-of-order ACKs are recorded, but they do not move the sender base past a missing lower sequence number. If the sender does not receive an ACK before the per-packet timer expires, only that unacknowledged packet is retransmitted. This is the defining behavior of Selective Repeat.
 
 ### Phase C — Completion
 
