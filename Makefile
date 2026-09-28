@@ -19,7 +19,7 @@ test: check
 	$(PYTHON) -m unittest discover -s tests -v
 
 benchmark:
-	$(PYTHON) experiments/benchmark.py
+	$(PYTHON) -m experiments.benchmark
 
 demo-receive:
 	$(PYTHON) -m rdtx receive --port 9000 --output-dir received --trace
