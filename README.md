@@ -1,181 +1,263 @@
-# RDTX — Reliable UDP Transfer
+# RDTX — Reliable Data Transfer over UDP
 
-RDTX is a **reliable file-transfer protocol built on top of UDP** that demonstrates how transport-layer reliability can be created when the underlying channel may lose, corrupt, delay, duplicate, or reorder datagrams.
+[![CI](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml/badge.svg)](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Project](https://img.shields.io/badge/Computer%20Networks-Mini%20Project-orange)
 
-Instead of hiding reliability inside TCP, this project exposes the mechanisms directly: **sequence numbers, Selective Repeat acknowledgements, retransmission timers, CRC32 packet validation, out-of-order buffering, duplicate detection, and final SHA-256 verification**.
+**RDTX** is an educational reliable file-transfer protocol implemented on top of UDP. It demonstrates how reliability can be built when the underlying transport does not guarantee delivery, ordering, duplicate suppression, or retransmission.
 
-## Why this is a Computer Networks project
+The project exposes the networking concepts directly instead of hiding them behind TCP: **Selective Repeat, sliding windows, sequence numbers, ACKs, retransmission timers, CRC32, out-of-order buffering, duplicate handling, impairment simulation, and end-to-end SHA-256 verification**.
 
-UDP provides datagrams but does not guarantee delivery, ordering, duplicate suppression, or recovery from corruption. RDTX adds those properties at the application layer so every reliability mechanism can be observed during a CN demonstration.
+## Project objectives
 
-### Reliability features
+- Implement reliable file transfer using UDP sockets.
+- Demonstrate Selective Repeat ARQ with a configurable sliding window.
+- Recover from DATA-packet and ACK loss.
+- Detect corrupted datagrams and trigger recovery.
+- Handle out-of-order and duplicate packets safely.
+- Verify the reconstructed file end-to-end.
+- Generate reproducible measurements for mini-project analysis.
 
-- Sliding window with **Selective Repeat** behavior
-- Per-packet sequence numbers and ACKs
-- Per-packet timeout and retransmission
-- CRC32 integrity checking on every RDTX datagram
-- Receiver-side out-of-order buffering
-- Duplicate packet detection and re-ACKing
-- Reliable HELLO and FIN control exchanges
-- SHA-256 verification of the reconstructed file
-- Built-in packet loss, corruption, and delay simulation
-- Transfer statistics for retransmissions, drops, throughput, duplicates, and checksum failures
+## Key features
+
+| Area | Implementation |
+|---|---|
+| Reliability | Selective Repeat-style per-packet ACK and retransmission |
+| Integrity | CRC32 per datagram + SHA-256 for the completed file |
+| Windowing | Configurable number of outstanding DATA packets |
+| Failure simulation | DATA/ACK loss, corruption and delay |
+| Observability | Live packet trace mode and transfer summaries |
+| Experiments | JSON statistics export + automated CSV benchmark |
+| Validation | HELLO metadata, sequence range and chunk-length checks |
+| Quality | Unit/integration tests and GitHub Actions for Python 3.10–3.13 |
+| Dependencies | Python standard library only |
 
 ## Architecture
 
-```text
-                    RDTX over UDP
+~~~text
+          +-------------------- RDTX SENDER --------------------+
+File ---> | Chunking -> Sliding Window -> Seq/CRC32 -> UDP TX  |
+          +------------------------------------------------------+
+                                  |
+                         unreliable datagrams
+                        loss / corrupt / delay
+                                  |
+          +------------------- RDTX RECEIVER --------------------+
+File <--- | SHA-256 <- Reassembly <- Buffer <- CRC32/Seq check  |
+          +------------------------------------------------------+
+                                  |
+                         per-packet ACKs
+~~~
 
- +------------------+                  +------------------+
- |      Sender      |                  |     Receiver     |
- |------------------|                  |------------------|
- | Read file        |                  | Validate packet  |
- | Split into chunks|                  | CRC32 check      |
- | Sliding window   |   UDP network    | Buffer by seq    |
- | Seq + CRC32      | ---------------> | ACK each packet  |
- | Timeout/retry    | <--------------- | Reassemble file  |
- | Track ACKs       |                  | SHA-256 verify    |
- +------------------+                  +------------------+
-           |                                    |
-           +------ Loss / corruption simulator--+
-```
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full component and protocol design.
 
-The detailed packet format and state machine are in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+## Repository structure
+
+~~~text
+RDTX-Reliable-UDP-Transfer/
+├── rdtx/
+│   ├── __main__.py       # python -m rdtx entry point
+│   ├── cli.py            # unified send/receive command
+│   ├── config.py         # defaults and CLI validation
+│   ├── protocol.py       # packet format and CRC32
+│   ├── sender.py         # Selective Repeat sender
+│   ├── receiver.py       # ACK, buffering and reassembly
+│   ├── simulator.py      # loss/corruption/delay simulator
+│   └── reporting.py      # JSON experiment statistics
+├── experiments/
+│   └── benchmark.py      # repeatable localhost benchmark
+├── tests/
+│   ├── test_cli.py
+│   ├── test_integration.py
+│   ├── test_protocol.py
+│   └── test_validation.py
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── EXPERIMENTS.md
+│   ├── MINI_PROJECT_REPORT.md
+│   ├── PROTOCOL.md
+│   └── VIVA_GUIDE.md
+├── .github/workflows/tests.yml
+├── Makefile
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── demo.txt
+└── pyproject.toml
+~~~
 
 ## Requirements
 
-- Python **3.10+**
-- macOS, Linux, or Windows
-- No third-party runtime dependencies
+- Python 3.10 or newer
+- macOS, Linux or Windows
+- No third-party runtime packages
 
-## Quick start on macOS
+## Quick start
 
-Clone the repository:
+Clone the project:
 
-```bash
+~~~bash
 git clone https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer.git
 cd RDTX-Reliable-UDP-Transfer
-```
+~~~
 
-### Terminal 1 — start the receiver
+Run the tests first:
 
-```bash
-python3 -m rdtx.receiver --port 9000 --output-dir received
-```
-
-### Terminal 2 — send a file
-
-```bash
-python3 -m rdtx.sender demo.txt --host 127.0.0.1 --port 9000
-```
-
-The reconstructed file will appear as `received/demo.txt`.
-
-## Demo packet loss
-
-This is the best classroom demonstration. Start the receiver with simulated ACK loss:
-
-```bash
-python3 -m rdtx.receiver --port 9000 --ack-loss 0.15 --seed 20
-```
-
-Then send with 25% outgoing packet loss:
-
-```bash
-python3 -m rdtx.sender demo.txt --host 127.0.0.1 --loss 0.25 --seed 10
-```
-
-You should see retransmissions, while the final SHA-256 verification still succeeds and the received file remains identical.
-
-You can also simulate corruption and delay:
-
-```bash
-python3 -m rdtx.sender demo.txt --corrupt 0.05 --delay-ms 80 --seed 42
-```
-
-## Useful sender options
-
-```text
---chunk-size 1024   bytes carried in each DATA packet
---window 8          maximum unacknowledged packets in flight
---timeout 0.35      retransmission timeout in seconds
---max-retries 40    retry limit
---loss 0.20         outgoing packet loss probability
---corrupt 0.05      outgoing corruption probability
---delay-ms 50       random delay between 0 and this value
---seed 42           reproducible network simulation
-```
-
-Receiver equivalents are `--ack-loss`, `--ack-corrupt`, and `--ack-delay-ms`.
-
-## Run the tests
-
-```bash
+~~~bash
 python3 -m unittest discover -s tests -v
-```
+~~~
 
-The test suite covers:
+### Terminal 1 — receiver
 
-1. Packet encode/decode correctness
-2. CRC32 corruption detection
-3. Malformed packet rejection
-4. End-to-end localhost file transfer
-5. End-to-end transfer with deterministic packet and ACK loss
+~~~bash
+python3 -m rdtx receive --port 9000 --output-dir received
+~~~
 
-## Optional command installation
+### Terminal 2 — sender
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+~~~bash
+python3 -m rdtx send demo.txt --host 127.0.0.1 --port 9000
+~~~
 
-Then you can use:
+The reconstructed file is written to received/demo.txt.
 
-```bash
-rdtx-receive --port 9000
-rdtx-send demo.txt --host 127.0.0.1
-```
+## Live classroom demo
+
+Trace every important protocol event:
+
+**Terminal 1**
+
+~~~bash
+python3 -m rdtx receive --port 9000 --ack-loss 0.10 --seed 20 --trace
+~~~
+
+**Terminal 2**
+
+~~~bash
+python3 -m rdtx send demo.txt --host 127.0.0.1 --loss 0.25 --seed 10 --trace
+~~~
+
+The trace makes dropped packets, received ACKs and retransmissions visible while the final file still passes SHA-256 verification.
+
+## Simulating network problems
+
+Sender-side examples:
+
+~~~bash
+# 20% DATA loss
+python3 -m rdtx send demo.txt --loss 0.20 --seed 10
+
+# 5% corruption
+python3 -m rdtx send demo.txt --corrupt 0.05 --seed 42
+
+# Random delay up to 80 ms
+python3 -m rdtx send demo.txt --delay-ms 80 --seed 42
+~~~
+
+Receiver-side ACK impairment:
+
+~~~bash
+python3 -m rdtx receive --ack-loss 0.15 --ack-corrupt 0.03 --ack-delay-ms 50 --seed 20
+~~~
+
+## Experiment results
+
+Generate a repeatable benchmark:
+
+~~~bash
+python3 experiments/benchmark.py
+~~~
+
+or:
+
+~~~bash
+make benchmark
+~~~
+
+This writes results/benchmark.csv with throughput, retransmissions, drops, corruption events, duplicates, checksum errors and integrity status for several scenarios.
+
+For an individual run, export JSON:
+
+~~~bash
+python3 -m rdtx receive --stats-json results/receiver.json
+python3 -m rdtx send demo.txt --loss 0.20 --seed 10 --stats-json results/sender.json
+~~~
+
+See [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) for the recommended experiment matrix and interpretation.
 
 ## Packet flow
 
-```text
-1. HELLO      -> filename, size, chunk count, SHA-256
-2. HELLO_ACK  <- receiver accepts the session
-3. DATA(n)    -> chunk with sequence number n
-4. ACK(n)     <- independent acknowledgement for n
-5. timeout    -> only missing/unacknowledged packets are retransmitted
-6. FIN        -> sender declares transfer complete
-7. FIN_ACK    <- receiver confirms final integrity check
-```
+~~~text
+Sender                                      Receiver
+  |                                             |
+  |---------------- HELLO --------------------->|
+  |<------------- HELLO_ACK --------------------|
+  |                                             |
+  |---- DATA(0), DATA(1), ... DATA(W-1) ------>|
+  |<------ ACK(0), ACK(2), ACK(1), ... --------|
+  |                                             |
+  |  timeout(seq=n) -> retransmit DATA(n)       |
+  |                                             |
+  |----------------- FIN ---------------------->|
+  |<-------------- FIN_ACK ---------------------|
+~~~
 
-## Project structure
+Only unacknowledged timed-out packets are retransmitted.
 
-```text
-RDTX-Reliable-UDP-Transfer/
-├── rdtx/
-│   ├── protocol.py      # packet header, CRC32, packet types
-│   ├── simulator.py     # loss/corruption/delay simulation
-│   ├── sender.py        # Selective Repeat sender
-│   └── receiver.py      # buffering, ACKs, reassembly, verification
-├── tests/
-│   ├── test_protocol.py
-│   └── test_integration.py
-├── docs/
-│   └── PROTOCOL.md
-├── .github/workflows/
-│   └── tests.yml
-├── demo.txt
-├── pyproject.toml
-└── README.md
-```
+## Packet header
+
+Every datagram carries a fixed 26-byte RDTX header containing:
+
+- Magic value and protocol version
+- Packet type
+- Session ID
+- Sequence number
+- ACK number
+- Payload length
+- CRC32
+
+The exact binary layout is documented in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+
+## Development commands
+
+~~~bash
+make check
+make test
+make benchmark
+make demo-receive
+make demo-send
+make demo-lossy
+~~~
+
+The package can also be installed in editable mode:
+
+~~~bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+rdtx --help
+~~~
+
+## Documentation for submission
+
+- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Protocol specification:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
+- **Experiment methodology:** [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)
+- **Mini-project report draft:** [docs/MINI_PROJECT_REPORT.md](docs/MINI_PROJECT_REPORT.md)
+- **Viva preparation:** [docs/VIVA_GUIDE.md](docs/VIVA_GUIDE.md)
+
+## Testing
+
+The automated suite covers packet serialization, CRC corruption detection, malformed datagrams, metadata validation, filename sanitization, CLI behavior, statistics export, ordinary localhost transfer, and deterministic lossy transfer.
+
+GitHub Actions executes compile checks, tests and package installation on Python 3.10, 3.11, 3.12 and 3.13.
 
 ## Scope and limitations
 
-RDTX is intentionally an **educational protocol**. It demonstrates reliability but does not try to replace TCP or QUIC. It does not provide congestion control, encryption/authentication, NAT traversal, or production-grade flow control.
+RDTX is intentionally an educational protocol rather than a replacement for TCP or QUIC. It currently handles one transfer per receiver process, uses a fixed retransmission timeout, keeps the transfer in memory, uses IPv4 sockets, and does not implement congestion control, authentication or encryption.
 
-That limited scope is useful for a CN mini-project because each reliability mechanism is small enough to inspect, modify, explain, and demonstrate live.
+These boundaries keep the core Computer Networks mechanisms visible and suitable for a mini-project demonstration.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
