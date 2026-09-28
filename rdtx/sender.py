@@ -8,10 +8,25 @@ import os
 import secrets
 import socket
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .protocol import ChecksumError, Packet, PacketType, ProtocolError, json_payload
+from .config import (
+    DEFAULT_CHUNK_SIZE,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_PORT,
+    DEFAULT_TIMEOUT,
+    DEFAULT_WINDOW_SIZE,
+    MAX_UDP_DATAGRAM,
+    non_negative_float,
+    port_number,
+    positive_float,
+    positive_int,
+    probability,
+)
+from .protocol import ChecksumError, MAX_PAYLOAD, Packet, PacketType, ProtocolError, json_payload
+from .reporting import save_stats
 from .simulator import LossSimulator
 
 
@@ -21,6 +36,7 @@ class SenderStats:
     data_packets: int = 0
     datagrams_sent: int = 0
     simulated_drops: int = 0
+    simulated_corruptions: int = 0
     retransmissions: int = 0
     ack_packets: int = 0
     checksum_errors: int = 0
@@ -44,20 +60,23 @@ class RDTXSender:
     def __init__(
         self,
         host: str,
-        port: int = 9000,
+        port: int = DEFAULT_PORT,
         *,
-        chunk_size: int = 1024,
-        window_size: int = 8,
-        timeout: float = 0.35,
-        max_retries: int = 40,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
         loss: float = 0.0,
         corruption: float = 0.0,
         delay_ms: float = 0.0,
         seed: int | None = None,
         verbose: bool = True,
+        trace: bool = False,
     ) -> None:
-        if not 1 <= chunk_size <= 60_000:
-            raise ValueError("chunk_size must be between 1 and 60000")
+        if not 1 <= port <= 65_535:
+            raise ValueError("port must be between 1 and 65535")
+        if not 1 <= chunk_size <= MAX_PAYLOAD:
+            raise ValueError(f"chunk_size must be between 1 and {MAX_PAYLOAD}")
         if window_size < 1:
             raise ValueError("window_size must be >= 1")
         if timeout <= 0:
@@ -71,6 +90,7 @@ class RDTXSender:
         self.timeout = timeout
         self.max_retries = max_retries
         self.verbose = verbose
+        self.trace = trace
         self.simulator = LossSimulator(loss, corruption, delay_ms, seed)
         self.stats = SenderStats()
 
@@ -78,14 +98,39 @@ class RDTXSender:
         if self.verbose:
             print(message, flush=True)
 
-    def _send(self, sock: socket.socket, raw: bytes, *, retransmission: bool = False) -> None:
+    def _trace(self, message: str) -> None:
+        if self.trace:
+            print(f"[TRACE] {message}", flush=True)
+
+    def _send(
+        self,
+        sock: socket.socket,
+        raw: bytes,
+        *,
+        label: str,
+        retransmission: bool = False,
+    ) -> None:
         result = self.simulator.sendto(sock, raw, self.destination)
         if result.sent:
             self.stats.datagrams_sent += 1
         else:
             self.stats.simulated_drops += 1
+        if result.corrupted:
+            self.stats.simulated_corruptions += 1
         if retransmission:
             self.stats.retransmissions += 1
+
+        if self.trace:
+            state = "DROP" if not result.sent else "TX"
+            details = []
+            if retransmission:
+                details.append("retransmission")
+            if result.corrupted:
+                details.append("simulated-corruption")
+            if result.delayed_ms:
+                details.append(f"delay={result.delayed_ms:.1f}ms")
+            suffix = f" ({', '.join(details)})" if details else ""
+            self._trace(f"{state} {label}{suffix}")
 
     def _exchange_control(
         self,
@@ -96,7 +141,12 @@ class RDTXSender:
     ) -> Packet:
         raw = packet.encode()
         for attempt in range(self.max_retries + 1):
-            self._send(sock, raw, retransmission=attempt > 0)
+            self._send(
+                sock,
+                raw,
+                label=packet.packet_type.name,
+                retransmission=attempt > 0,
+            )
             deadline = time.monotonic() + self.timeout
             while True:
                 remaining = deadline - time.monotonic()
@@ -104,29 +154,42 @@ class RDTXSender:
                     break
                 sock.settimeout(remaining)
                 try:
-                    incoming, _ = sock.recvfrom(65_535)
+                    incoming, _ = sock.recvfrom(MAX_UDP_DATAGRAM)
                     decoded = Packet.decode(incoming)
                 except socket.timeout:
                     break
                 except ChecksumError:
                     self.stats.checksum_errors += 1
+                    self._trace("RX corrupted control/ACK datagram -> ignored")
                     continue
                 except ProtocolError:
+                    self._trace("RX invalid datagram -> ignored")
                     continue
+
                 if decoded.session_id != session_id:
                     continue
+                self._trace(f"RX {decoded.packet_type.name}")
                 if decoded.packet_type == PacketType.ERROR:
                     message = decoded.payload.decode("utf-8", errors="replace")
                     raise RuntimeError(f"receiver error: {message}")
                 if decoded.packet_type == expected_type:
                     return decoded
-        raise TimeoutError(f"no {expected_type.name} received after {self.max_retries} retries")
+
+        raise TimeoutError(
+            f"no {expected_type.name} received after {self.max_retries} retries"
+        )
 
     def send_file(self, file_path: str | os.PathLike[str]) -> SenderStats:
         path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"input file not found: {path}")
+
         data = path.read_bytes()
         digest = hashlib.sha256(data).hexdigest()
-        chunks = [data[i : i + self.chunk_size] for i in range(0, len(data), self.chunk_size)]
+        chunks = [
+            data[offset : offset + self.chunk_size]
+            for offset in range(0, len(data), self.chunk_size)
+        ]
         session_id = secrets.randbits(32) or 1
         self.stats = SenderStats(file_bytes=len(data), data_packets=len(chunks))
 
@@ -141,19 +204,25 @@ class RDTXSender:
 
         start = time.monotonic()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            self._log("=" * 60)
+            self._log("RDTX SENDER")
+            self._log("=" * 60)
             self._log(
-                f"[RDTX] session={session_id} destination={self.destination[0]}:{self.destination[1]}"
+                f"Destination : {self.destination[0]}:{self.destination[1]}\n"
+                f"File        : {path.name}\n"
+                f"Size        : {len(data)} bytes\n"
+                f"Chunks      : {len(chunks)}\n"
+                f"Window      : {self.window_size}\n"
+                f"Session ID  : {session_id}"
             )
-            self._log(
-                f"[RDTX] file={path.name} size={len(data)} bytes chunks={len(chunks)} window={self.window_size}"
-            )
+
             self._exchange_control(
                 sock,
                 Packet(PacketType.HELLO, session_id, payload=json_payload(metadata)),
                 PacketType.HELLO_ACK,
                 session_id,
             )
-            self._log("[RDTX] HELLO acknowledged; starting data transfer")
+            self._log("[RDTX] Handshake complete. Starting data transfer.")
 
             inflight: dict[int, InFlight] = {}
             acked: set[int] = set()
@@ -168,15 +237,16 @@ class RDTXSender:
                         seq=next_seq,
                         payload=chunks[next_seq],
                     ).encode()
-                    self._send(sock, raw)
+                    self._send(sock, raw, label=f"DATA seq={next_seq}")
                     inflight[next_seq] = InFlight(raw=raw, sent_at=time.monotonic())
                     next_seq += 1
 
                 try:
-                    incoming, _ = sock.recvfrom(65_535)
+                    incoming, _ = sock.recvfrom(MAX_UDP_DATAGRAM)
                     packet = Packet.decode(incoming)
                     if packet.session_id == session_id and packet.packet_type == PacketType.ACK:
                         self.stats.ack_packets += 1
+                        self._trace(f"RX ACK seq={packet.ack}")
                         if packet.ack in inflight:
                             inflight.pop(packet.ack, None)
                             acked.add(packet.ack)
@@ -184,8 +254,9 @@ class RDTXSender:
                     pass
                 except ChecksumError:
                     self.stats.checksum_errors += 1
+                    self._trace("RX corrupted ACK -> ignored")
                 except ProtocolError:
-                    pass
+                    self._trace("RX invalid datagram -> ignored")
 
                 now = time.monotonic()
                 for seq, state in list(inflight.items()):
@@ -193,11 +264,16 @@ class RDTXSender:
                         continue
                     if state.retries >= self.max_retries:
                         raise TimeoutError(f"packet {seq} exceeded retry limit")
-                    self._send(sock, state.raw, retransmission=True)
+                    self._send(
+                        sock,
+                        state.raw,
+                        label=f"DATA seq={seq}",
+                        retransmission=True,
+                    )
                     state.sent_at = time.monotonic()
                     state.retries += 1
 
-            self._log("[RDTX] all DATA packets acknowledged")
+            self._log("[RDTX] All DATA packets acknowledged.")
             fin_payload = json_payload({"sha256": digest, "size": len(data)})
             self._exchange_control(
                 sock,
@@ -207,35 +283,54 @@ class RDTXSender:
             )
 
         self.stats.elapsed = time.monotonic() - start
+        self._log("-" * 60)
         self._log(
-            f"[RDTX] transfer complete in {self.stats.elapsed:.3f}s | "
-            f"retransmissions={self.stats.retransmissions} | "
-            f"throughput={self.stats.throughput_kib_s:.1f} KiB/s"
+            "TRANSFER COMPLETE\n"
+            f"Elapsed         : {self.stats.elapsed:.3f} s\n"
+            f"Retransmissions : {self.stats.retransmissions}\n"
+            f"Simulated drops : {self.stats.simulated_drops}\n"
+            f"Corruptions     : {self.stats.simulated_corruptions}\n"
+            f"Throughput      : {self.stats.throughput_kib_s:.1f} KiB/s\n"
+            f"SHA-256         : {digest}"
         )
+        self._log("-" * 60)
         return self.stats
+
+
+def _chunk_size(value: str) -> int:
+    number = int(value)
+    if not 1 <= number <= MAX_PAYLOAD:
+        raise argparse.ArgumentTypeError(
+            f"chunk size must be between 1 and {MAX_PAYLOAD}"
+        )
+    return number
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Send a file reliably over UDP using the RDTX protocol."
+        description="Send a file reliably over UDP using the RDTX protocol.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("file", help="path of the file to send")
-    parser.add_argument("--host", default="127.0.0.1", help="receiver host (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=9000, help="receiver UDP port (default: 9000)")
-    parser.add_argument("--chunk-size", type=int, default=1024, help="payload bytes per DATA packet")
-    parser.add_argument("--window", type=int, default=8, help="Selective Repeat window size")
-    parser.add_argument("--timeout", type=float, default=0.35, help="retransmission timeout in seconds")
-    parser.add_argument("--max-retries", type=int, default=40, help="maximum retries per packet/control exchange")
-    parser.add_argument("--loss", type=float, default=0.0, help="simulated outgoing loss rate, e.g. 0.2")
-    parser.add_argument("--corrupt", type=float, default=0.0, help="simulated outgoing corruption rate")
-    parser.add_argument("--delay-ms", type=float, default=0.0, help="maximum simulated outgoing delay")
+    parser.add_argument("--host", default="127.0.0.1", help="receiver IPv4 host")
+    parser.add_argument("--port", type=port_number, default=DEFAULT_PORT, help="receiver UDP port")
+    parser.add_argument("--chunk-size", type=_chunk_size, default=DEFAULT_CHUNK_SIZE, help="payload bytes per DATA packet")
+    parser.add_argument("--window", type=positive_int, default=DEFAULT_WINDOW_SIZE, help="Selective Repeat window size")
+    parser.add_argument("--timeout", type=positive_float, default=DEFAULT_TIMEOUT, help="retransmission timeout in seconds")
+    parser.add_argument("--max-retries", type=positive_int, default=DEFAULT_MAX_RETRIES, help="maximum retries per packet/control exchange")
+    parser.add_argument("--loss", type=probability, default=0.0, help="simulated outgoing loss probability")
+    parser.add_argument("--corrupt", type=probability, default=0.0, help="simulated outgoing corruption probability")
+    parser.add_argument("--delay-ms", type=non_negative_float, default=0.0, help="maximum simulated outgoing delay")
     parser.add_argument("--seed", type=int, default=None, help="random seed for repeatable impairment simulation")
-    parser.add_argument("--quiet", action="store_true", help="suppress progress output")
+    parser.add_argument("--stats-json", metavar="PATH", help="write transfer statistics to a JSON file")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--trace", action="store_true", help="show per-packet protocol activity")
+    output.add_argument("--quiet", action="store_true", help="suppress progress output")
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
     sender = RDTXSender(
         args.host,
         args.port,
@@ -248,8 +343,26 @@ def main() -> None:
         delay_ms=args.delay_ms,
         seed=args.seed,
         verbose=not args.quiet,
+        trace=args.trace,
     )
-    sender.send_file(args.file)
+    stats = sender.send_file(args.file)
+    if args.stats_json:
+        target = save_stats(
+            args.stats_json,
+            "sender",
+            stats,
+            file=Path(args.file).name,
+            destination=f"{args.host}:{args.port}",
+            chunk_size=args.chunk_size,
+            window_size=args.window,
+            timeout_seconds=args.timeout,
+            loss=args.loss,
+            corruption=args.corrupt,
+            max_delay_ms=args.delay_ms,
+            seed=args.seed,
+        )
+        if not args.quiet:
+            print(f"[RDTX] Statistics written to {target}", flush=True)
 
 
 if __name__ == "__main__":
