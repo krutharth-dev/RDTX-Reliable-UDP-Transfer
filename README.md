@@ -74,6 +74,7 @@ RDTX-Reliable-UDP-Transfer/
 │   └── test_validation.py
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── DEMO_GUIDE.md
 │   ├── EXPERIMENTS.md
 │   ├── MINI_PROJECT_REPORT.md
 │   ├── PROTOCOL.md
@@ -241,6 +242,7 @@ rdtx --help
 ## Documentation for submission
 
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Demo/evaluation guide:** [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md)
 - **Protocol specification:** [docs/PROTOCOL.md](docs/PROTOCOL.md)
 - **Experiment methodology:** [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)
 - **Mini-project report draft:** [docs/MINI_PROJECT_REPORT.md](docs/MINI_PROJECT_REPORT.md)
