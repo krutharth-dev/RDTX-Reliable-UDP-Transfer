@@ -23,13 +23,7 @@ class IntegrationTests(unittest.TestCase):
             source.write_bytes((b"RDTX integration test\n" * 300) + bytes(range(256)))
             port = free_udp_port()
 
-            receiver = RDTXReceiver(
-                "127.0.0.1",
-                port,
-                output_dir=output,
-                linger=0.1,
-                verbose=False,
-            )
+            receiver = RDTXReceiver("127.0.0.1", port, output_dir=output, linger=0.1, verbose=False)
             result = {}
 
             def run_receiver():
@@ -38,14 +32,7 @@ class IntegrationTests(unittest.TestCase):
             thread = threading.Thread(target=run_receiver, daemon=True)
             thread.start()
 
-            sender = RDTXSender(
-                "127.0.0.1",
-                port,
-                chunk_size=333,
-                window_size=5,
-                timeout=0.1,
-                verbose=False,
-            )
+            sender = RDTXSender("127.0.0.1", port, chunk_size=333, window_size=5, timeout=0.1, verbose=False)
             stats = sender.send_file(source)
             thread.join(timeout=3)
 
@@ -62,22 +49,11 @@ class IntegrationTests(unittest.TestCase):
             source.write_bytes(b"")
             port = free_udp_port()
 
-            receiver = RDTXReceiver(
-                "127.0.0.1",
-                port,
-                output_dir=output,
-                linger=0.1,
-                verbose=False,
-            )
+            receiver = RDTXReceiver("127.0.0.1", port, output_dir=output, linger=0.1, verbose=False)
             thread = threading.Thread(target=receiver.receive_one, daemon=True)
             thread.start()
 
-            sender = RDTXSender(
-                "127.0.0.1",
-                port,
-                timeout=0.1,
-                verbose=False,
-            )
+            sender = RDTXSender("127.0.0.1", port, timeout=0.1, verbose=False)
             stats = sender.send_file(source)
             thread.join(timeout=3)
 
@@ -85,6 +61,35 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual((output / source.name).read_bytes(), b"")
             self.assertEqual(stats.file_bytes, 0)
             self.assertEqual(stats.data_packets, 0)
+
+    def test_explicit_packet_reordering(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "reordered.bin"
+            output = root / "received"
+            source.write_bytes(bytes(range(256)) * 16)
+            port = free_udp_port()
+
+            receiver = RDTXReceiver("127.0.0.1", port, output_dir=output, linger=0.1, verbose=False)
+            thread = threading.Thread(target=receiver.receive_one, daemon=True)
+            thread.start()
+
+            sender = RDTXSender(
+                "127.0.0.1",
+                port,
+                chunk_size=256,
+                window_size=4,
+                timeout=0.1,
+                reorder_rate=1.0,
+                seed=99,
+                verbose=False,
+            )
+            stats = sender.send_file(source)
+            thread.join(timeout=3)
+
+            self.assertFalse(thread.is_alive())
+            self.assertEqual((output / source.name).read_bytes(), source.read_bytes())
+            self.assertGreater(stats.reordered_pairs, 0)
 
     def test_transfer_with_repeatable_loss(self):
         with tempfile.TemporaryDirectory() as temp:

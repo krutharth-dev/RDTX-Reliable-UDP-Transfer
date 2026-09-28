@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rdtx-reliable-udp-transfer"
-version = "1.2.0"
+version = "1.3.0"
 description = "Educational Selective Repeat file-transfer protocol built over UDP."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,8 +31,9 @@ Documentation = "https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/tre
 
 [project.scripts]
 rdtx = "rdtx.cli:main"
-rdtx-send = "rdtx.sender:main"
-rdtx-receive = "rdtx.receiver:main"
+rdtx-send = "rdtx.cli:send_main"
+rdtx-receive = "rdtx.cli:receive_main"
+rdtx-benchmark = "rdtx.cli:benchmark_main"
 
 [tool.setuptools]
-packages = ["rdtx"]
+packages = ["rdtx", "experiments"]
