@@ -1,12 +1,12 @@
 PYTHON ?= python3
 
-.PHONY: help check test benchmark demo-receive demo-send demo-lossy clean
+.PHONY: help check test benchmark verify demo-receive demo-send demo-lossy clean
 
 help:
 	@echo "RDTX developer commands"
 	@echo "  make check         Compile Python sources"
 	@echo "  make test          Run the complete test suite"
-	@echo "  make benchmark     Generate repeatable CSV experiment results"
+	@echo "  make benchmark     Generate repeatable CSV experiment results"\n\t@echo "  make verify        Run tests and benchmark together"
 	@echo "  make demo-receive  Start a localhost receiver with packet tracing"
 	@echo "  make demo-send     Send demo.txt with packet tracing"
 	@echo "  make demo-lossy    Send demo.txt with 25% simulated packet loss"

@@ -54,6 +54,38 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(stats.file_bytes, source.stat().st_size)
             self.assertEqual(result["stats"].bytes_written, source.stat().st_size)
 
+    def test_empty_file_transfer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "empty.bin"
+            output = root / "received"
+            source.write_bytes(b"")
+            port = free_udp_port()
+
+            receiver = RDTXReceiver(
+                "127.0.0.1",
+                port,
+                output_dir=output,
+                linger=0.1,
+                verbose=False,
+            )
+            thread = threading.Thread(target=receiver.receive_one, daemon=True)
+            thread.start()
+
+            sender = RDTXSender(
+                "127.0.0.1",
+                port,
+                timeout=0.1,
+                verbose=False,
+            )
+            stats = sender.send_file(source)
+            thread.join(timeout=3)
+
+            self.assertFalse(thread.is_alive())
+            self.assertEqual((output / source.name).read_bytes(), b"")
+            self.assertEqual(stats.file_bytes, 0)
+            self.assertEqual(stats.data_packets, 0)
+
     def test_transfer_with_repeatable_loss(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
