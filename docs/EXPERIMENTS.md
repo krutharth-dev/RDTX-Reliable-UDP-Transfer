@@ -7,7 +7,7 @@ A networking mini-project is stronger when reliability is demonstrated with meas
 Run:
 
 ~~~bash
-python3 experiments/benchmark.py
+python3 -m experiments.benchmark
 ~~~
 
 or:
