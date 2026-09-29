@@ -1,18 +1,60 @@
-# Demo Guide
+# RDTX VisualLab Demo Guide
 
-## 1. Local baseline
+## Before entering the evaluation
 
-Start rdtx-web, upload demo.txt, choose Baseline, and show window movement plus PASS integrity.
+Run:
 
-## 2. Loss recovery
+~~~bash
+git pull origin main
+source .venv/bin/activate
+python3 -m pip install -e .
+make demo-check
+~~~
 
-Use 20 percent DATA loss plus 10 percent ACK loss. Filter the timeline to Drop and Retry.
+Then start:
 
-## 3. Reordering
+~~~bash
+rdtx-web
+~~~
 
-Use 100 percent reordering and show out-of-order DATA while final integrity remains PASS.
+Keep [Troubleshooting](TROUBLESHOOTING.md) available.
 
-## 4. Two-host LAN
+## 1. Establish the core idea
+
+Start with a baseline local transfer.
+
+Explain:
+
+> UDP itself does not recover lost or out-of-order data. RDTX implements Selective Repeat above UDP. The browser is observing the actual protocol rather than simulating the transport.
+
+Show window movement and final integrity PASS.
+
+## 2. Demonstrate reliability
+
+Use:
+
+~~~text
+DATA loss: 20%
+ACK loss: 10%
+Window: 8
+Seed: 2026
+~~~
+
+Filter the timeline to **Drop** and **Retry**.
+
+Explain the difference between:
+
+- a DATA packet being lost;
+- an ACK being lost;
+- the receiver seeing a duplicate after retransmission.
+
+## 3. Demonstrate ordering independence
+
+Set reordering to 100%.
+
+Show REORDER events and explain that the receiver stores chunks by sequence number rather than arrival order.
+
+## 4. Demonstrate two-host operation
 
 On Laptop B:
 
@@ -20,12 +62,36 @@ On Laptop B:
 rdtx receive --host 0.0.0.0 --port 9000 --output-dir received --trace
 ~~~
 
-On Laptop A choose LAN mode, enter Laptop B's IP, and transfer the file. Show that the remote terminal receives the file and VisualLab completes only after verified FIN_ACK.
+On Laptop A choose **LAN / two-host**, enter Laptop B's LAN IPv4 address, and transfer a small file.
 
-## 5. Matrix Lab
+Point out that successful FIN_ACK means the remote receiver completed final size and SHA-256 checks.
 
-Sweep window size with 1,4,8,16. Show the generated table and download the matrix report.
+If the classroom network isolates devices, immediately switch to Local lab rather than debugging the network during the evaluation.
 
-## 6. Evidence
+## 5. Demonstrate experimental analysis
 
-Download a run report, JSON export, history CSV, and, for local mode, the reconstructed received file.
+Run Matrix Lab:
+
+~~~text
+Sweep: Window size
+Values: 1,4,8,16
+~~~
+
+Download the matrix report.
+
+Explain that rows are sequential and keep the file/seed/base configuration fixed.
+
+## 6. Show evidence
+
+Finish by showing:
+
+- generated run report;
+- JSON export;
+- CSV history;
+- reconstructed local file;
+- Matrix report;
+- green GitHub Actions status.
+
+## Suggested closing statement
+
+> RDTX VisualLab demonstrates reliable file transfer over unreliable UDP using Selective Repeat, then makes the protocol observable and experimentally reproducible through local/LAN execution, controlled impairment, live telemetry, and reportable measurements.

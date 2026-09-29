@@ -4,47 +4,69 @@
 
 **RDTX VisualLab: Web-Based Reliable File Transfer and Selective Repeat Analysis over Unreliable UDP**
 
-## The gap this project addresses
+## Scope of the claim
 
-The project does **not** claim that Selective Repeat, UDP file transfer, packet analyzers, or network simulators are new. The gap is the way these ideas are combined for a compact Computer Networks learning and experimentation workflow.
+RDTX VisualLab does **not** claim that Selective Repeat, UDP file transfer, packet capture, or network simulation are new inventions.
 
-### 1. Browser ARQ tools often visualize a model rather than execute a real UDP transfer
+The project's contribution is an integrated educational/experimental workflow in which a real reliable-UDP implementation can be controlled, observed, impaired, compared, and documented from one lightweight application.
 
-The open-source ARQ Simulator by Farhan Alam is an interactive web teaching tool for Stop-and-Wait, Go-Back-N and Selective Repeat, implemented in JavaScript with animated simulation controls and statistics.
+## Existing tool categories
 
-Reference: https://github.com/FarhanAlam-Official/ARQ-Simulator
+### Browser ARQ simulators
 
-**Gap addressed by RDTX VisualLab:** the dashboard drives the project's existing Python UDP sockets. Packet loss, ACK loss, corruption, reordering, retransmission and final integrity belong to an actual localhost file transfer rather than only a browser state-machine animation.
+Interactive ARQ teaching tools can animate Stop-and-Wait, Go-Back-N, and Selective Repeat behavior in the browser.
 
-### 2. Packet analyzers expose traffic in detail but are not a purpose-built ARQ experiment workflow
+Reference:
+- https://github.com/FarhanAlam-Official/ARQ-Simulator
 
-Wireshark is a general network packet analyzer designed to capture and inspect live or recorded traffic in detail. It is excellent for protocol analysis but does not provide a dedicated workflow for configuring a custom Selective Repeat sender, injecting controlled impairment, transferring a chosen file, and comparing experiment results in one screen.
+RDTX VisualLab differs by using the browser only as the control/observability layer; actual file bytes are exchanged through Python UDP sockets.
+
+### Packet analyzers
+
+Wireshark is a general-purpose packet analyzer for capturing and inspecting live or recorded network traffic.
 
 References:
 - https://www.wireshark.org/docs/man-pages/wireshark
 - https://www.wireshark.org/docs/wsug_html/
 
-**Gap addressed:** RDTX VisualLab presents protocol-specific events—window movement, DATA, ACK, drops, reordering, retransmissions and integrity—directly in the experiment UI.
+Wireshark provides much deeper packet inspection, while VisualLab provides a purpose-built experiment workflow for this custom protocol: impairment controls, sender-window telemetry, protocol-specific events, result persistence, and report generation.
 
-### 3. General-purpose simulators/emulators are powerful but broader than the mini-project need
+### General network simulators/emulators
 
-ns-3 is a discrete-event network simulator for internet systems, while Mininet creates virtual hosts, switches, controllers and links using real kernel/application code.
+ns-3 is a discrete-event network simulator. Mininet provides virtual hosts, switches, controllers, and links.
 
 References:
 - https://www.nsnam.org/documentation/
 - https://mininet.org/
 
-**Gap addressed:** RDTX VisualLab is intentionally narrow and lightweight: one application, one reliability problem, real localhost UDP sockets, reproducible impairment controls, and report-ready experiment history.
+These tools solve broader networking problems. RDTX VisualLab intentionally stays narrow enough to run, inspect, and explain on one or two ordinary laptops.
 
-## Resulting contribution
+## Gap addressed by RDTX VisualLab
 
-RDTX VisualLab contributes an **integrated observability layer** over a real educational reliable-UDP implementation:
+The project integrates:
 
-1. real file bytes travel through UDP sockets;
-2. Selective Repeat sender-window behavior is visible live;
-3. DATA/ACK loss, corruption, delay and reordering are configurable;
-4. final integrity is checked byte-for-byte and with the RDTX SHA-256 path;
-5. experiment configurations and outcomes are stored for comparison;
-6. the same engine remains accessible through the CLI and automated tests.
+1. real file bytes sent through UDP sockets;
+2. strict Selective Repeat sender-window behavior;
+3. controllable DATA/ACK loss, corruption, delay, and DATA reordering;
+4. live protocol-specific telemetry;
+5. local and two-host LAN execution;
+6. final integrity verification;
+7. persisted experiment history;
+8. repeatable parameter-sweep matrices;
+9. JSON/CSV/Markdown evidence generation.
 
-This is a defensible mini-project contribution because it fills an educational tooling/observability gap without making an unsupported claim of protocol novelty.
+The research/engineering gap is therefore **observability and experiment integration around a real educational reliable-UDP implementation**, not ARQ algorithm novelty.
+
+## Why the LAN and matrix features matter
+
+LAN mode shows that the protocol is not dependent on a sender and receiver sharing one process or one host.
+
+Matrix Lab provides a controlled way to vary one selected parameter while keeping the file, seed, and other configuration constant. This supports evidence-based discussion of measured behavior without claiming that one local experiment establishes a universal performance law.
+
+## Positioning statement for the report
+
+A safe concise statement is:
+
+> RDTX VisualLab integrates real Selective Repeat file transfer over UDP with controlled impairment, live protocol observability, two-host execution, reproducible parameter sweeps, and report-ready experiment evidence in a lightweight local application.
+
+This wording is specific to what the repository actually implements and avoids unsupported claims of protocol novelty.

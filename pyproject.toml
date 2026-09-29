@@ -4,13 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rdtx-visual-lab"
-version = "2.2.0"
+version = "2.2.1"
 description = "Web-based reliable UDP transfer and Selective Repeat analysis lab."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 keywords = ["computer-networks", "udp", "selective-repeat", "reliable-data-transfer", "flask"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Framework :: Flask",
+  "Intended Audience :: Education",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Education",
+  "Topic :: System :: Networking",
+]
 dependencies = ["Flask>=3.0,<4"]
+
+[project.urls]
+Repository = "https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer"
+Documentation = "https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/tree/main/docs"
 
 [project.scripts]
 rdtx = "rdtx.cli:main"
