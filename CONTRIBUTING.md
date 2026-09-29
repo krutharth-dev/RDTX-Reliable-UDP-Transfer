@@ -1,25 +1,44 @@
-# Contributing to RDTX
+# Contributing to RDTX VisualLab
 
-RDTX is an educational Computer Networks mini-project. Changes should keep the protocol easy to inspect and explain.
+RDTX VisualLab is an educational Computer Networks project. Contributions should improve reliability, observability, reproducibility, or documentation without hiding the networking mechanisms the project is intended to demonstrate.
 
-## Development workflow
+## Workflow
 
-1. Create a branch from main.
-2. Keep changes focused and use descriptive commit messages.
-3. Run make test before opening a pull request.
-4. Update documentation when packet behavior or CLI options change.
-5. Do not add third-party runtime dependencies unless there is a clear educational need.
+1. Create a branch from `main`.
+2. Keep one pull request focused on one logical change.
+3. Add or update tests for behavior changes.
+4. Update protocol/web documentation when interfaces or packet behavior change.
+5. Run `make test` before opening the pull request.
+6. For demo-sensitive changes, run `make demo-check`.
 
-## Code style
+## Design principles
 
-- Python 3.10+.
-- Prefer small functions and explicit protocol state.
-- Keep wire-format changes documented in docs/PROTOCOL.md.
-- Add or update tests for behavioral changes.
-- Avoid hiding networking logic behind frameworks; the project is meant to demonstrate sockets and reliability mechanisms directly.
+- Keep UDP socket and ARQ behavior explicit.
+- Do not move transport reliability into browser JavaScript.
+- Prefer standard-library networking components.
+- Avoid dependencies that do not add clear educational value.
+- Keep localhost operation as the reliable fallback.
+- Treat LAN mode as a controlled/private-network experiment.
+- Preserve deterministic seeds for impairment experiments.
 
-## Testing
+## Areas and tests
 
-    make test
+| Change | Expected verification |
+|---|---|
+| Packet/wire format | Protocol tests + docs/PROTOCOL.md |
+| Sender window/ACK logic | Window tests + integration test |
+| Receiver validation | Receiver/integration tests |
+| Web API/UI | Web integration tests |
+| LAN behavior | LAN-mode integration test |
+| Matrix behavior | Matrix integration test |
+| Reports/exports | Web/report assertions |
+| Packaging/CLI | CLI tests + CI installed-command check |
 
-The integration tests use localhost UDP sockets and include deterministic packet-loss scenarios.
+## Pull requests
+
+Use the repository pull-request template and describe:
+
+- what changed;
+- why it matters to the CN project;
+- how it was tested;
+- whether protocol semantics changed.

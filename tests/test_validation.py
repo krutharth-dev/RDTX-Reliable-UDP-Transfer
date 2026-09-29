@@ -12,7 +12,7 @@ class ValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "stats.json"
             save_stats(target, "sender", SenderStats(file_bytes=100, elapsed=0.5))
-            self.assertEqual(json.loads(target.read_text())["version"], "2.2.0")
+            self.assertEqual(json.loads(target.read_text())["version"], "2.2.1")
 
 
 if __name__ == "__main__":

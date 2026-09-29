@@ -3,38 +3,68 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
       - name: Install project
         run: python -m pip install .
+
+      - name: Verify dependency consistency
+        run: python -m pip check
+
       - name: Compile source
         run: python -m compileall -q rdtx experiments webapp tests
-      - name: Run tests
+
+      - name: Run protocol, CLI and web tests
         run: python -m unittest discover -s tests -v
-      - name: Verify commands
+
+      - name: Verify installed commands
         run: |
           rdtx --version
           rdtx-web --help
           rdtx-web --version
+
       - name: Benchmark smoke test
         if: matrix.python-version == '3.12'
         run: |
           rdtx benchmark --size-kib 8 --output /tmp/rdtx-benchmark.csv --markdown /tmp/rdtx-benchmark.md
           test -s /tmp/rdtx-benchmark.csv
           test -s /tmp/rdtx-benchmark.md
+
+      - name: Upload benchmark evidence
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdtx-benchmark-python-3.12
+          path: |
+            /tmp/rdtx-benchmark.csv
+            /tmp/rdtx-benchmark.md
+          if-no-files-found: error
+          retention-days: 14

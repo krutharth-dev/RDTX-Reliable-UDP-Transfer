@@ -1,21 +1,63 @@
 # Testing and Verification
 
-Run `make test` for the automated suite, `make benchmark` for measured scenarios, or `make verify` for both.
+RDTX VisualLab is tested at packet, state-machine, transfer, CLI, web API, LAN, matrix, packaging, and benchmark levels.
+
+## Local commands
+
+Compile the project:
+
+~~~bash
+make check
+~~~
+
+Run automated tests:
+
+~~~bash
+make test
+~~~
+
+Run tests plus the standard benchmark:
+
+~~~bash
+make verify
+~~~
+
+Run the pre-evaluation readiness sequence:
+
+~~~bash
+make demo-check
+~~~
+
+## Coverage areas
 
 | Area | Verification |
 |---|---|
-| Packet format | Encode/decode and malformed datagrams |
-| CRC32 | Bit corruption detection |
+| Packet format | Encode/decode and malformed datagram rejection |
+| CRC32 | Corrupted packet detection |
 | Selective Repeat | Strict base/window movement |
 | ACK handling | Out-of-order and duplicate ACK behavior |
 | Peer validation | Unexpected UDP endpoints ignored |
-| Metadata | Chunk count, SHA-256 and filename checks |
-| File transfer | Binary and empty files |
-| Loss recovery | Deterministic DATA/ACK loss |
-| Reordering | Reversed adjacent DATA pairs reconstruct correctly |
-| CLI | Help, version, benchmark, graceful errors |
-| Reporting | JSON, CSV and Markdown output |
+| Metadata | File/chunk/hash consistency |
+| Local transfer | Binary and empty-file transfers |
+| Loss recovery | Deterministic DATA and ACK loss |
+| Reordering | Reversed DATA pairs reconstruct correctly |
+| Web API | Validation, health, exports, downloads |
+| LAN mode | Sender communicates with a separately started receiver |
+| Matrix Lab | Multiple real UDP runs execute sequentially |
+| Reporting | JSON, CSV, per-run Markdown, matrix Markdown |
+| Packaging | Installed CLI/web entry points |
+| Benchmark | Real localhost transfers produce CSV and Markdown evidence |
 
-GitHub Actions validates Python 3.10–3.13. Python 3.12 additionally performs a real benchmark smoke test and verifies both result files.
+## Continuous integration
 
-Historical failed CI runs remain immutable in GitHub. Submission status should be judged from the latest `main` run.
+GitHub Actions runs the suite on Python 3.10, 3.11, 3.12, and 3.13.
+
+The workflow also:
+
+- runs `pip check` after installation;
+- applies a 10-minute job timeout;
+- cancels superseded runs on the same branch/ref;
+- runs the real benchmark smoke test on Python 3.12;
+- retains Python 3.12 benchmark CSV/Markdown as a CI artifact for 14 days.
+
+Historical failed runs remain visible in GitHub. The relevant submission state is the latest successful run associated with the current `main` commit.

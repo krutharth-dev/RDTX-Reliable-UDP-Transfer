@@ -1,45 +1,67 @@
-# RDTX VisualLab 2.2
+# RDTX VisualLab
+
+[![CI](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml/badge.svg)](https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Version](https://img.shields.io/badge/RDTX-2.2.1-blueviolet)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Topic](https://img.shields.io/badge/Computer%20Networks-Selective%20Repeat-orange)
 
 **RDTX VisualLab: Web-Based Reliable File Transfer and Selective Repeat Analysis over Unreliable UDP**
 
-RDTX VisualLab is a Computer Networks experimentation app built around a real Selective Repeat file-transfer protocol over UDP.
+RDTX VisualLab is a local-first Computer Networks experimentation application built around a **real reliable file-transfer protocol over UDP**. The browser is the control and observability layer; the transport itself remains Python UDP sockets implementing Selective Repeat ARQ.
 
-## Version 2.2 highlights
+## Why this project exists
 
-### Two-host LAN mode
+UDP does not provide reliable delivery, ordering, duplicate suppression, retransmission, or connection-oriented state. RDTX makes those mechanisms explicit and observable.
 
-Run the receiver on Laptop B:
+The project combines:
 
-~~~bash
-rdtx receive --host 0.0.0.0 --port 9000 --output-dir received --trace
+- strict Selective Repeat sender-window behavior;
+- individual ACKs and per-packet retransmission timers;
+- CRC32 datagram validation;
+- out-of-order buffering and duplicate handling;
+- SHA-256 final-file verification;
+- configurable DATA/ACK loss, corruption, delay, and DATA reordering;
+- live browser telemetry driven by actual protocol events;
+- localhost and two-host LAN experiments;
+- repeatable parameter sweeps and report generation.
+
+The research claim is **integration and observability**, not invention of a new ARQ algorithm. See [Research Gap](docs/RESEARCH_GAP.md).
+
+## Architecture
+
+~~~text
+                           HTTP + SSE
+Browser  <-------------------------------------->  Flask VisualLab
+                                                        |
+                                                        | launches / observes
+                                                        v
+File ---> RDTX Sender ======== real UDP ========> RDTX Receiver ---> File
+          Selective Repeat                        buffer + ACK
+          seq / timeout                           CRC32
+          retransmission                          duplicate handling
+                  |                                  |
+                  +------ loss / delay / corruption-+
+                                                     |
+                                                  SHA-256
+                                                     |
+                                                  FIN_ACK
 ~~~
 
-On Laptop A, start VisualLab, choose **LAN / two-host**, enter Laptop B's LAN IPv4 address and port, then send the file.
+In **LAN mode**, sender and receiver can run on different laptops on the same network.
 
-Successful LAN completion means Laptop B returned FIN_ACK only after its final size and SHA-256 checks passed.
-
-### Automatic experiment reports
-
-Every completed run provides a **Generate report** action. The Markdown report contains configuration, measured metrics, and cautious observations suitable for a Results and Analysis section.
-
-### Matrix Lab
-
-Use one file and base configuration to sweep:
-
-- window size: 1,4,8,16
-- DATA loss: 0,10,20,30
-- corruption: 0,5,10,15
-- reordering: 0,25,50,100
-
-Each row is a real sequential localhost UDP transfer. A matrix report is generated after completion.
-
-## macOS setup
+## Quick start on macOS
 
 ~~~bash
-git pull origin main
+git clone https://github.com/krutharth-dev/RDTX-Reliable-UDP-Transfer.git
+cd RDTX-Reliable-UDP-Transfer
+
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e .
+
+rdtx --version
+make test
 rdtx-web
 ~~~
 
@@ -49,19 +71,131 @@ Open:
 http://127.0.0.1:5000
 ~~~
 
+Expected version:
+
+~~~text
+RDTX 2.2.1
+~~~
+
+## Recommended demo flow
+
+### 1. Baseline
+
+Upload `demo.txt`, choose **Baseline**, and show normal window progression with integrity PASS.
+
+### 2. Loss recovery
+
+Use:
+
+~~~text
+DATA loss: 20%
+ACK loss: 10%
+Window: 8
+Seed: 2026
+~~~
+
+Filter the timeline to **Drop** and **Retry**.
+
+### 3. Reordering
+
+Use 100% reordering and show that arrival/transmit order can differ while sequence numbers still allow correct reconstruction.
+
+### 4. Two-host LAN
+
+On Laptop B:
+
+~~~bash
+rdtx receive --host 0.0.0.0 --port 9000 --output-dir received --trace
+~~~
+
+On Laptop A select **LAN / two-host**, enter Laptop B's LAN IP, and send the file.
+
+### 5. Matrix Lab
+
+Sweep:
+
+~~~text
+Window size: 1,4,8,16
+~~~
+
+or:
+
+~~~text
+DATA loss: 0,10,20,30
+~~~
+
+Download the matrix report and compare measured throughput/retransmissions.
+
+## Evidence generated by the project
+
+A completed experiment can provide:
+
+- reconstructed file download for local runs;
+- JSON run export;
+- Markdown experiment report;
+- CSV experiment-history export;
+- Markdown matrix comparison report;
+- benchmark CSV and Markdown outputs.
+
+These artifacts are intended to support the report with **measured results from the actual demo machine**, not fabricated values.
+
+## CLI
+
+The web app is optional. The protocol remains usable directly:
+
+~~~bash
+rdtx send demo.txt --host 127.0.0.1 --loss 0.20 --trace
+rdtx receive --host 0.0.0.0 --port 9000 --trace
+rdtx benchmark
+~~~
+
 ## Verification
+
+Run the normal suite:
 
 ~~~bash
 make test
+~~~
+
+Run tests plus the standard benchmark:
+
+~~~bash
 make verify
 ~~~
 
-Documentation:
+Before evaluation day, run the dedicated readiness check:
 
-- LAN mode: docs/LAN_MODE.md
-- Matrix experiments: docs/MATRIX_EXPERIMENTS.md
-- Research gap: docs/RESEARCH_GAP.md
-- Web architecture: docs/WEB_ARCHITECTURE.md
-- Mini-project report: docs/MINI_PROJECT_REPORT.md
-- Demo guide: docs/DEMO_GUIDE.md
-- Viva guide: docs/VIVA_GUIDE.md
+~~~bash
+make demo-check
+~~~
+
+GitHub Actions verifies Python 3.10, 3.11, 3.12, and 3.13. The Python 3.12 job also performs a real UDP benchmark smoke test and retains its CSV/Markdown outputs as CI artifacts.
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [Mini-project report](docs/MINI_PROJECT_REPORT.md) | Submission-ready technical narrative |
+| [Research gap](docs/RESEARCH_GAP.md) | Defensible project positioning |
+| [Protocol](docs/PROTOCOL.md) | Packet format and transfer behavior |
+| [Algorithms](docs/ALGORITHMS.md) | Selective Repeat pseudocode |
+| [Architecture](docs/ARCHITECTURE.md) | Core protocol architecture |
+| [Web architecture](docs/WEB_ARCHITECTURE.md) | Browser/backend/UDP separation |
+| [LAN mode](docs/LAN_MODE.md) | Two-laptop setup |
+| [Matrix experiments](docs/MATRIX_EXPERIMENTS.md) | Controlled parameter sweeps |
+| [Reproducibility](docs/REPRODUCIBILITY.md) | Experimental methodology |
+| [Testing](docs/TESTING.md) | Verification strategy |
+| [Demo guide](docs/DEMO_GUIDE.md) | Evaluation sequence |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Fast recovery from demo problems |
+| [Viva guide](docs/VIVA_GUIDE.md) | Key technical questions |
+| [Submission checklist](docs/SUBMISSION_CHECKLIST.md) | Final pre-submission checks |
+
+## Scope
+
+RDTX VisualLab is an educational protocol laboratory, not a TCP/QUIC replacement and not an internet-facing production file-sharing service. It uses a fixed retransmission timeout, IPv4, full-file buffering, and no congestion control, authentication, or encryption.
+
+The web server binds to localhost by default. See [SECURITY.md](SECURITY.md) before changing bind addresses.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
