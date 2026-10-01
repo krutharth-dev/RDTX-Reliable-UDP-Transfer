@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+<title id="title">RDTX VisualLab — illustrated 45-second protocol tour</title>
+<desc id="desc">Animated conceptual tour: local baseline, Selective Repeat sender window, a possible packet drop, per-packet retry, reordering, and integrity checks. Illustrative rather than captured traffic.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#09111b"/><stop offset="1" stop-color="#142538"/></linearGradient></defs>
+<style>
+.ui{font-family:Arial,Helvetica,sans-serif}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.title{fill:#eaf6fc;font-weight:700;font-size:31px}.subtitle{fill:#aac3d0;font-size:17px}
+.panel{fill:#122030;stroke:#2c4557;stroke-width:2}.num{fill:#eaf6fc;font-size:18px;font-weight:700}
+.stage{opacity:0}.s0{opacity:1;animation:s0 45s linear infinite}.s1{animation:s1 45s linear infinite}.s2{animation:s2 45s linear infinite}.s3{animation:s3 45s linear infinite}.s4{animation:s4 45s linear infinite}.s5{animation:s5 45s linear infinite}.s6{animation:s6 45s linear infinite}
+@keyframes s0{0%,12%{opacity:1}14%,100%{opacity:0}}@keyframes s1{0%,12%{opacity:0}14%,25%{opacity:1}27%,100%{opacity:0}}@keyframes s2{0%,25%{opacity:0}27%,39%{opacity:1}41%,100%{opacity:0}}@keyframes s3{0%,39%{opacity:0}41%,53%{opacity:1}55%,100%{opacity:0}}@keyframes s4{0%,53%{opacity:0}55%,67%{opacity:1}69%,100%{opacity:0}}@keyframes s5{0%,67%{opacity:0}69%,81%{opacity:1}83%,100%{opacity:0}}@keyframes s6{0%,81%{opacity:0}83%,99%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.stage{animation:none;opacity:0}.s0{opacity:1}}
+</style>
+<rect x="1" y="1" width="958" height="538" rx="16" fill="url(#bg)" stroke="#2c4557" stroke-width="2"/>
+<text class="ui" x="33" y="47" fill="#70f7b3" font-size="22" font-weight="700">RX</text><text class="ui" x="77" y="47" fill="#eaf6fc" font-size="22" font-weight="700">RDTX</text><text class="ui" x="150" y="47" fill="#5ad2ff" font-size="22" font-weight="700">VISUALLAB</text>
+<rect x="667" y="19" width="265" height="36" rx="10" fill="#3c3025"/><text class="ui" x="683" y="42" fill="#ffc575" font-size="12" font-weight="700">ILLUSTRATIVE · NO LIVE DATA</text>
+<path d="M30 69H930 M30 491H930" stroke="#2c4557" stroke-width="2"/>
+<text class="ui" x="31" y="517" fill="#b3c9d4" font-size="12">Concept preview based on project source and documentation · not a captured transfer</text>
+<g class="stage s0">
+<text class="title ui" x="43" y="129">Reliable UDP, made observable.</text><text class="subtitle ui" x="44" y="164">Send · observe · verify with a real protocol under the dashboard.</text>
+<rect class="panel" x="41" y="214" width="878" height="204" rx="14"/>
+<rect x="73" y="277" width="179" height="74" rx="12" fill="#213a2c" stroke="#70f7b3"/><text class="num ui" x="119" y="323">SENDER</text>
+<path d="M270 314H420m-13-9 13 9-13 9M539 314H689m-13-9 13 9-13 9" stroke="#5ad2ff" stroke-width="4" fill="none"/>
+<rect x="428" y="277" width="103" height="74" rx="12" fill="#17394a" stroke="#5ad2ff"/><text class="num ui" x="459" y="323">UDP</text>
+<rect x="703" y="277" width="182" height="74" rx="12" fill="#213a2c" stroke="#70f7b3"/><text class="num ui" x="737" y="323">RECEIVER</text>
+</g>
+<g class="stage s1">
+<text class="title ui" x="43" y="129">01 / Configure the local lab</text><text class="subtitle ui" x="44" y="164">Baseline preset · real Python UDP sender and receiver</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<g class="ui" font-size="19" fill="#eaf6fc"><text x="74" y="259">Choose file: demo.txt</text><text x="74" y="308">Window size: 8</text><text x="74" y="357">Seed: 2026</text><text x="523" y="259">DATA loss: 0%</text><text x="523" y="308">ACK loss: 0%</text></g>
+<rect x="523" y="338" width="313" height="52" rx="10" fill="#70f7b3"/><text class="ui" x="560" y="369" fill="#082018" font-size="17" font-weight="700">RUN UDP EXPERIMENT</text>
+</g>
+<g class="stage s2">
+<text class="title ui" x="43" y="129">02 / Selective Repeat window</text><text class="subtitle ui" x="44" y="164">Individual DATA frames are tracked and ACKed independently.</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<text class="mono" x="74" y="255" fill="#70f7b3" font-size="18">SENDER WINDOW [0, 8)</text>
+<g font-size="21" text-anchor="middle" class="num mono">
+<rect x="73" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="111" y="318">0</text>
+<rect x="178" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="216" y="318">1</text>
+<rect x="283" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="321" y="318">2</text>
+<rect x="388" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="426" y="318">3</text>
+<rect x="493" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="531" y="318">4</text>
+<rect x="598" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="636" y="318">5</text>
+<rect x="703" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="741" y="318">6</text>
+<rect x="808" y="280" width="77" height="60" rx="9" fill="#18394b" stroke="#5ad2ff"/><text x="846" y="318">7</text></g>
+<text class="subtitle ui" x="74" y="385">ACK(n) confirms a single sequence number.</text>
+</g>
+<g class="stage s3">
+<text class="title ui" x="43" y="129">03 / Introduce controlled loss</text><text class="subtitle ui" x="44" y="164">Lossy link: DATA 20% · ACK 10% · Window 8 · Seed 2026</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<text class="mono" x="68" y="255" fill="#b3cad5" font-size="19">DATA(0)   DATA(1)   DATA(2)   DATA(3)   DATA(4)</text>
+<rect x="432" y="280" width="126" height="56" rx="10" fill="#432c35" stroke="#ff8b91" stroke-width="2"/><text class="ui" x="455" y="314" fill="#ff8b91" font-size="18" font-weight="700">DROP (3)</text>
+<text class="subtitle ui" x="68" y="383">Example drop shown for explanation, not an actual run result.</text>
+</g>
+<g class="stage s4">
+<text class="title ui" x="43" y="129">04 / Retry only what was missed</text><text class="subtitle ui" x="44" y="164">A per-packet timeout triggers a retransmission of missing DATA.</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<rect x="74" y="266" width="324" height="91" rx="11" fill="#423125" stroke="#ffc575"/><text class="ui" x="96" y="304" fill="#ffc575" font-size="22" font-weight="700">TIMEOUT · DATA(3)</text><text class="ui" x="96" y="332" fill="#d9c0a5" font-size="14">Retry the missing packet</text>
+<path d="M413 314H544m-13-9 13 9-13 9" stroke="#5ad2ff" stroke-width="4" fill="none"/>
+<rect x="558" y="266" width="310" height="91" rx="11" fill="#1f3b2c" stroke="#70f7b3"/><text class="ui" x="583" y="304" fill="#70f7b3" font-size="22" font-weight="700">ACK(3)</text><text class="ui" x="583" y="332" fill="#bbdbc7" font-size="14">Continue window progress</text>
+</g>
+<g class="stage s5">
+<text class="title ui" x="43" y="129">05 / Buffer reordered arrivals</text><text class="subtitle ui" x="44" y="164">Valid chunks are reconstructed by sequence number, not arrival order.</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<text class="mono" x="72" y="265" fill="#b7a0ff" font-size="19">ILLUSTRATIVE ARRIVAL ORDER</text>
+<g class="mono" fill="#eaf6fc" font-weight="700" font-size="28" text-anchor="middle">
+<text x="119" y="329">0</text><text x="242" y="329">2</text><text x="365" y="329">1</text><text x="488" y="329">3</text><text x="611" y="329">5</text><text x="734" y="329">4</text></g>
+<text class="subtitle ui" x="72" y="390">CRC32 verifies datagrams; duplicates are not stored twice.</text>
+</g>
+<g class="stage s6">
+<text class="title ui" x="43" y="129">06 / Verify and export evidence</text><text class="subtitle ui" x="44" y="164">After a completed transfer, check size and SHA-256 before FIN_ACK.</text>
+<rect class="panel" x="41" y="209" width="878" height="213" rx="14"/>
+<g class="ui" font-size="21" fill="#eaf6fc"><text x="78" y="264">✓ Verify all expected chunks</text><text x="78" y="304">✓ Check final file size</text><text x="78" y="344">✓ Compare SHA-256 hash</text></g>
+<text x="513" y="270" font-size="19" fill="#70f7b3" font-family="Arial" font-weight="700">EXPORTS</text>
+<text x="513" y="310" font-size="18" fill="#eaf6fc" font-family="Arial">JSON · Markdown report</text><text x="513" y="346" font-size="18" fill="#eaf6fc" font-family="Arial">Reconstructed file</text>
+<text x="78" y="398" class="mono" fill="#5ad2ff" font-size="16">TRY IT: pip install -e .   →   rdtx-web</text>
+</g>
+</svg>
