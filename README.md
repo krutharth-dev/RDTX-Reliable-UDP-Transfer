@@ -10,6 +10,12 @@
 
 RDTX VisualLab is a local-first Computer Networks experimentation application built around a **real reliable file-transfer protocol over UDP**. The browser is the control and observability layer; the transport itself remains Python UDP sockets implementing Selective Repeat ARQ.
 
+### See it in 45 seconds
+
+[![Illustrated animated tour of RDTX's real protocol features, not recorded transfer data](docs/media/rdtx-45s-explainer.svg)](docs/SHORT_DEMO.md)
+
+*Illustrated explainer, not a recorded transfer or measured benchmark.* [View the 45-second recording plan and reproducible local demo ↗](docs/SHORT_DEMO.md). The real app is local-first; launch it with `rdtx-web` after setup.
+
 ## Why this project exists
 
 UDP does not provide reliable delivery, ordering, duplicate suppression, retransmission, or connection-oriented state. RDTX makes those mechanisms explicit and observable.
@@ -186,6 +192,7 @@ GitHub Actions verifies Python 3.10, 3.11, 3.12, and 3.13. The Python 3.12 job a
 | [Reproducibility](docs/REPRODUCIBILITY.md) | Experimental methodology |
 | [Testing](docs/TESTING.md) | Verification strategy |
 | [Demo guide](docs/DEMO_GUIDE.md) | Evaluation sequence |
+| [45-second showcase](docs/SHORT_DEMO.md) | Illustrated preview, recording shot list, and local reproduction instructions |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Fast recovery from demo problems |
 | [Viva guide](docs/VIVA_GUIDE.md) | Key technical questions |
 | [Submission checklist](docs/SUBMISSION_CHECKLIST.md) | Final pre-submission checks |
